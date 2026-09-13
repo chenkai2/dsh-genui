@@ -289,6 +289,60 @@ try {
     assert.equal(colors.width, '70%')
     log(`排序、颜色、悬停和节点重新插入验证通过：${JSON.stringify({ position, colors })}`)
     if (pageErrors.length > 0) throw new Error(`组件渲染异常: ${pageErrors.join(' | ')}`)
+    // Exercise the installed SVG without remounting it when the host changes theme.
+    await page.emulateMedia({ colorScheme: 'light' })
+    await page.evaluate(() => {
+      const fixture = document.createElement('div')
+      fixture.setAttribute('data-diagram-smoke', '')
+      fixture.style.width = '320px'
+      const host = document.createElement('div')
+      host.className = 'md-code-block'
+      const label = document.createElement('div')
+      label.textContent = 'dsh-ui'
+      const pre = document.createElement('pre')
+      pre.textContent = JSON.stringify({ items: [{ type: 'diagram', kind: 'architecture', title: '主题验收', nodes: [
+        { id: 'a', label: '入口', type: 'focal', x: 40, y: 40, w: 128, h: 64 },
+        { id: 'b', label: '服务', type: 'backend', x: 40, y: 144, w: 128, h: 64 },
+        { id: 'c', label: '存储', type: 'store', x: 40, y: 248, w: 128, h: 64 },
+      ], edges: [] }] })
+      host.append(label, pre)
+      fixture.append(host)
+      document.body.prepend(fixture)
+    })
+    const diagram = page.locator('[data-diagram-smoke] [data-genui-diagram]')
+    await diagram.waitFor({ state: 'visible' })
+    const originalSvg = await diagram.locator('svg').elementHandle()
+    for (const mode of ['light', 'dark', 'light']) {
+      await page.emulateMedia({ colorScheme: mode })
+      await page.waitForFunction(dark => document.body.hasAttribute('data-ds-dark-theme') === dark, mode === 'dark')
+      const result = await diagram.evaluate(element => {
+        const svg = element.querySelector('svg')
+        const text = [...svg.querySelectorAll('text')].find(t => t.textContent === '服务')
+        const probe = document.createElement('span')
+        probe.style.backgroundColor = 'var(--dsw-alias-bg-layer-2)'
+        probe.style.color = 'var(--dsw-alias-label-primary)'
+        element.append(probe)
+        const expected = { paper: getComputedStyle(probe).backgroundColor, ink: getComputedStyle(probe).color }
+        probe.remove()
+        const rect = svg.getBoundingClientRect()
+        return {
+          expected, paper: getComputedStyle(svg).backgroundColor, ink: getComputedStyle(text).fill,
+          node: getComputedStyle(text.parentElement.querySelectorAll('rect')[1]).fill,
+          clipped: [...svg.querySelectorAll('text')].filter(t => {
+            const box = t.getBoundingClientRect()
+            return box.left < rect.left - 1 || box.right > rect.right + 1 || box.bottom > rect.bottom + 1
+          }).map(t => t.textContent),
+        }
+      })
+      assert.equal(result.paper, result.expected.paper, `${mode}: diagram follows host background`)
+      assert.equal(result.ink, result.expected.ink, `${mode}: diagram follows host text`)
+      assert.equal(result.node, result.expected.paper, `${mode}: backend node follows theme`)
+      assert.deepEqual(result.clipped, [], `${mode}: narrow diagram legend remains visible`)
+      assert.ok(await originalSvg.evaluate(el => el.isConnected), 'theme changes must not remount the diagram')
+      await diagram.screenshot({ path: join(artifactsDir, `diagram-${mode}.png`) })
+    }
+    log('图表深浅主题往返切换、节点配色及窄图例验证通过')
+
     log('smoke 模式：安装、激活、Diff/Code/JSON 真实渲染及复制均通过')
     await browser.close()
     await cleanup()
