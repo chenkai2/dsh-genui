@@ -54,7 +54,7 @@ function renderNodeBox(
 ): React.ReactNode {
   const treatment = nodeTreatment(type, palette)
   const cx = box.x + box.w / 2
-  // Editorial 64px ramp: name centered, sublabel below, tag top-left, index bottom-right.
+  // Editorial 64px ramp: name centered, sublabel below, tag top-left.
   const nameY = box.y + (box.h - NODE_H) / 2 + 28
   const subY = box.y + (box.h - NODE_H) / 2 + 44
   const tagW = Math.min(44, Math.max(24, (tag ?? '').length * 7 + 8))
@@ -79,7 +79,6 @@ function renderNodeBox(
           <text x={box.x + 8 + tagW / 2} y={box.y + 15} fill={inkAt(treatment.stroke, 0.8)} fontSize={7} fontFamily={FONT_MONO} textAnchor="middle" letterSpacing={0.8}>{tag}</text>
         </>
       )}
-      {/* Index number: bottom-right, half-transparent, editorial big numeral */}
       <text x={cx} y={nameY} fill={palette.ink} fontSize={12} fontWeight={600} fontFamily={FONT_SANS} textAnchor="middle">{label}</text>
       {sub !== undefined && (
         <text x={cx} y={subY} fill={palette.soft} fontSize={9} fontFamily={FONT_MONO} textAnchor="middle">{sub}</text>
@@ -205,8 +204,7 @@ function nextUid(): string {
 /** The `diagram` node renderer. */
 export function DiagramNode({ node }: { node: GenuiDiagram }) {
   const uid = useMemo(nextUid, [])
-  // Host tokens are read from the document (with body/root fallbacks), so the
-  // palette follows the surrounding UI instead of a hardcoded editorial skin.
+  // CSS token references follow the surrounding theme without remounting SVG nodes.
   const palette = useMemo(() => resolvePalette(node.variant, node.theme), [node.variant, node.theme])
   const layout = useMemo(() => resolveLayout(node, buildParentMap(node.edges ?? [])), [node])
 
