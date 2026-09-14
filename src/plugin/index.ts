@@ -109,7 +109,7 @@ The spec is a white-listed component tree rendered inline where the fence sits. 
 **发回答前最后自检一次**：这段内容里有没有 ≥3 条并列要点、任何对比、任何数字/指标、任何步骤或流程？有就先转成组件再开口。**状态汇报、进度说明、提交与改动清单同样算**——不要因为它是"说明文"就用纯文字写。这一条踩过的坑：连续几条汇报全靠文字，一条围栏都没发。
 - 趋势/占比 → \`chart\`（≤8 点）或 \`echart\`（多序列/要交互时）；配色默认跟随主题，只有语义需要时才用 \`palette\` / \`card.accent\`；排版用 grid 子节点的 \`"span":2\` 跨列做宽窄混排（bento），不要一列方块堆到底；数据多时给 \`table\`/\`chart\`/\`list\` 配一个 \`input\`(id) + \`filter\` 绑定，读者能就地筛选，不用再问一遍
 
-**字段速查**（完整见 genui skill）：\`stat\` \`{"label","value","delta"?}\` · \`table\` \`{"columns","rows","types"?,"total"?,"details"?,"filter"?,"export"?}\` · \`callout\` \`{"tone","title","content"}\` · \`progress\` \`{"value","variant"?,"target"?}\`
+**字段速查**（完整见 genui skill）：\`stat\` \`{"label":"...","value":"...","delta":"+12.4%|-3%"?}\` · \`table\` \`{"columns":["..."],"rows":[["..."]],"types":["text|num|delta|bar|badge"]?,"details":[[...]]?,"total":true?,"filter":"inputId"?,"export":true?}\` · \`callout\` \`{"tone":"info|success|warning|error","title":"...","content":"..."}\` · \`progress\` \`{"label":"...","value":0-100,"valueLabel":"70%"?,"variant":"ring"?,"target":70?}\` · \`keyvalue\` \`{"pairs":[{"key":"...","value":"..."}]}\` · \`steps\` \`{"current":n?,"steps":[{"title":"...","desc":"..."}]}\`
 
 Rules:
 - JSON 严格: 坏围栏降级为代码块；≥3 节点或含 table 的围栏发出前调用 validate_dsh_ui，❌ 修好再发（若附「已自动修复」JSON 照抄即可）。
