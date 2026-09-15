@@ -68,6 +68,7 @@
     "ui"
   ],
   "dependencies": {
+    "katex": "0.16.47",
     "react": "^18.3.1"
   },
   "peerDependencies": {
@@ -150,6 +151,7 @@
     "@deepseek-ai/dsh-workspace": "0.1.2-rc.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.0.0",
+    "@types/katex": "0.16.8",
     "@types/node": "^22.19.0",
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",

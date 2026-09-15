@@ -13,6 +13,41 @@ const html = (text: string): string => {
 }
 
 describe('inline markup', () => {
+  it.each([
+    String.raw`\(\frac{a}{b}\)`,
+    String.raw`\[\begin{pmatrix}a & b \\ c & d\end{pmatrix}\]`,
+    String.raw`$$\begin{cases}x^2 & x>0 \\ -x & x\le 0\end{cases}$$`,
+    String.raw`\[\begin{aligned}a&=b+c\\&=d\end{aligned}\]`,
+    String.raw`**$a*b$**`,
+    String.raw`==\(x^2\)==`,
+  ])('renders a complete formula: %s', source => {
+    const out = html(source)
+    expect(out).toContain('class="katex"')
+    expect(out).not.toContain('katex-error')
+    expect(out).toContain('<math')
+    expect(out).not.toContain('<div class=')
+  })
+
+  it('keeps a multiline display formula inside emphasis', () => {
+    const { container } = render(<span>{renderInline('**$$x +\ny$$**')}</span>)
+    expect(container.querySelector('strong .katex-display')).not.toBeNull()
+    expect(container.textContent).not.toContain('**')
+  })
+
+  it('updates a formula without leaving stale math or damaging surrounding text', () => {
+    const { container, rerender } = render(<span>{renderInline(String.raw`**\(x\)** tail`)}</span>)
+    expect(container.querySelector('strong .katex')).not.toBeNull()
+    rerender(<span>{renderInline(String.raw`**\(y+1\)** updated`)}</span>)
+    expect(container.querySelector('annotation')?.textContent).toBe('y+1')
+    expect(container.textContent).toContain('updated')
+  })
+
+  it('renders formula labels without nesting interactive links', () => {
+    const { container } = render(<button>{renderInline('[$x$](https://example.com)', false)}</button>)
+    expect(container.querySelector('button .katex')).not.toBeNull()
+    expect(container.querySelector('a')).toBeNull()
+  })
+
   it('renders code, bold, mark and an https link as elements', () => {
     const out = html('跑 `npm run build`，**一定要**看 ==退出码==，见 [文档](https://example.com/a)')
     expect(out).toContain('<code')

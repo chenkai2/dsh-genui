@@ -47,8 +47,8 @@ export const StepsNode = memo(function StepsNode({ steps }: { steps: GenuiSteps 
           <li key={i} className={`${css.step} ${done ? css.stepDone : ''} ${active ? css.stepActive : ''}`}>
             <span className={css.stepMarker}>{done ? '✓' : String(i + 1)}</span>
             <span className={css.stepContent}>
-              <span className={css.stepTitle}>{step.title}</span>
-              {step.desc !== undefined && <span className={css.stepDesc}>{step.desc}</span>}
+              <span className={css.stepTitle}>{renderInline(step.title)}</span>
+              {step.desc !== undefined && <span className={css.stepDesc}>{renderInline(step.desc)}</span>}
             </span>
           </li>
         )
@@ -64,7 +64,7 @@ export const KeyValueNode = memo(function KeyValueNode({ node }: { node: GenuiKe
     <dl className={css.keyvalue}>
       {pairs.map((pair, i) => (
         <div key={i} className={css.kvRow}>
-          <dt className={css.kvKey}>{pair.key}</dt>
+          <dt className={css.kvKey}>{renderInline(pair.key)}</dt>
           <dd className={css.kvValue}>{renderInline(pair.value)}</dd>
         </div>
       ))}
@@ -159,7 +159,7 @@ export function TabsNode({ tabs, onAction, depth = 0, answers }: {
             className={`${css.tab} ${i === safeActive ? css.tabActive : ''}`}
             onClick={() => setActive(i)}
           >
-            {tab.label}
+            {renderInline(tab.label, false)}
           </button>
         ))}
       </div>
@@ -202,7 +202,7 @@ export function AccordionNode({ node, onAction, depth = 0, answers }: {
             aria-controls={`${uid}-body-${i}`}
             onClick={() => setOpen(open === i ? null : i)}
           >
-            <span className={css.accTitle}>{item.title}</span>
+            <span className={css.accTitle}>{renderInline(item.title, false)}</span>
             <span className={css.accChevron} data-open={open === i} aria-hidden>▸</span>
           </button>
           {open === i && (
@@ -264,7 +264,7 @@ export const CopyNode = memo(function CopyNode({ node }: { node: GenuiCopy }) {
           })
         }}
       >
-        {copied ? '✓ 已复制' : (node.label ?? '复制')}
+        {copied ? '✓ 已复制' : renderInline(node.label ?? '复制', false)}
       </button>
       <span className={css.visuallyHidden} role="status">{copied ? '已复制到剪贴板' : ''}</span>
     </>
@@ -322,7 +322,7 @@ export const Scene3DNode = memo(function Scene3DNode({ node }: { node: GenuiScen
   }, [scene])
   return (
     <div className={css.scene3dWrap} data-genui-scene3d>
-      {node.title !== undefined && <div className={css.scene3dTitle}>{node.title}</div>}
+      {node.title !== undefined && <div className={css.scene3dTitle}>{renderInline(node.title)}</div>}
       <div ref={ref} className={css.scene3dCanvas} />
       {status === 'loading' && <div className={css.scene3dHint}>加载 3D 场景…</div>}
       {status === 'error' && <div className={css.scene3dHint}>3D 渲染失败</div>}
@@ -343,10 +343,10 @@ export const TimelineNode = memo(function TimelineNode({ node }: { node: GenuiTi
           </div>
           <div className={css.tlBody}>
             <div className={css.tlHead}>
-              <span className={css.tlTitle}>{item.title}</span>
-              {item.time !== undefined && <span className={css.tlTime}>{item.time}</span>}
+              <span className={css.tlTitle}>{renderInline(item.title, false)}</span>
+              {item.time !== undefined && <span className={css.tlTime}>{renderInline(item.time)}</span>}
             </div>
-            {item.desc !== undefined && <div className={css.tlDesc}>{item.desc}</div>}
+            {item.desc !== undefined && <div className={css.tlDesc}>{renderInline(item.desc)}</div>}
           </div>
         </div>
       ))}
@@ -445,7 +445,7 @@ export const QuizNode = memo(function QuizNode({ node, onAction }: {
   const action = node.action
   return (
     <div className={css.quiz} data-genui-quiz>
-      <div className={css.quizQuestion}>{node.question}</div>
+      <div className={css.quizQuestion}>{renderInline(node.question)}</div>
       <div className={css.quizOptions}>
         {options.map((opt, i) => {
           const isChosen = selected === i
@@ -477,7 +477,7 @@ export const QuizNode = memo(function QuizNode({ node, onAction }: {
               <span className={css.quizMarker}>
                 {answered ? (opt.correct === true ? '✓' : isChosen ? '✗' : '') : isChosen ? '●' : '○'}
               </span>
-              {opt.label}
+              {renderInline(opt.label, false)}
             </button>
           )
         })}
@@ -486,9 +486,9 @@ export const QuizNode = memo(function QuizNode({ node, onAction }: {
         <div className={css.quizResult} aria-live="polite">
           <div className={correct ? css.quizCorrectMsg : css.quizWrongMsg}>
             {correct ? '✓ 回答正确！' : '✗ 再想想看'}
-            {chosen?.feedback !== undefined && <div className={css.quizFeedback}>{chosen.feedback}</div>}
+            {chosen?.feedback !== undefined && <div className={css.quizFeedback}>{renderInline(chosen.feedback)}</div>}
           </div>
-          {node.explanation !== undefined && <div className={css.quizExplanation}>{node.explanation}</div>}
+          {node.explanation !== undefined && <div className={css.quizExplanation}>{renderInline(node.explanation)}</div>}
           <button type="button" className={css.quizRetry} onClick={() => setSelected(null)}>重新作答</button>
         </div>
       )}
@@ -503,7 +503,7 @@ export const BreadcrumbNode = memo(function BreadcrumbNode({ node }: { node: Gen
     <nav className={css.breadcrumb} aria-label="breadcrumb">
       {items.map((item, i) => (
         <span key={i} className={css.bcItem}>
-          <span className={`${css.bcText} ${i === items.length - 1 ? css.bcCurrent : ''}`}>{item}</span>
+          <span className={`${css.bcText} ${i === items.length - 1 ? css.bcCurrent : ''}`}>{renderInline(item)}</span>
           {i < items.length - 1 && <span className={css.bcSep}>/</span>}
         </span>
       ))}

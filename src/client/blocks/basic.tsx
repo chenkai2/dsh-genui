@@ -3,6 +3,7 @@
  * (the actionable-button chip). Used by the render dispatcher.
  * @module @changfenhuang/dsh-genui/client/blocks/basic
  */
+import { renderInline } from '../inline.ts'
 import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
 import css from '../GenuiBlock.module.css'
 import type { GenuiAudio, GenuiVideo } from '../spec.ts'
@@ -75,7 +76,7 @@ export const AudioNode = memo(function AudioNode({ node }: { node: GenuiAudio })
   const [failed, setFailed] = useState(false)
   return (
     <figure className={css.media}>
-      {node.alt !== undefined && <figcaption className={css.mediaLabel}>{node.alt}</figcaption>}
+      {node.alt !== undefined && <figcaption className={css.mediaLabel}>{renderInline(node.alt)}</figcaption>}
       {failed
         ? <div className={css.mediaError} role="alert">音频无法播放</div>
         : <audio
@@ -95,7 +96,7 @@ export const VideoNode = memo(function VideoNode({ node }: { node: GenuiVideo })
   const [failed, setFailed] = useState(false)
   return (
     <figure className={css.media}>
-      {node.alt !== undefined && <figcaption className={css.mediaLabel}>{node.alt}</figcaption>}
+      {node.alt !== undefined && <figcaption className={css.mediaLabel}>{renderInline(node.alt)}</figcaption>}
       {failed
         ? <div className={css.mediaError} role="alert">视频无法播放</div>
         : <video

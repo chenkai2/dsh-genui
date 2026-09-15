@@ -3,6 +3,7 @@
  * input/select/textarea. All state flows through the shared AnswersState.
  * @module @changfenhuang/dsh-genui/client/blocks/forms
  */
+import { renderInline } from '../inline.ts'
 import { useEffect, useId, useRef, useState } from 'react'
 import css from '../GenuiBlock.module.css'
 import { GENUI_LIMITS } from '../genui-runtime/index.ts'
@@ -50,7 +51,7 @@ export function RadioNode({ node, onAction, answers }: {
   }, [group, node.label, node.answer, node.explanation, node.options, node.selected])
   return (
     <div className={css.fieldGroup} role="radiogroup" aria-label={node.label}>
-      {node.label !== undefined && <span className={css.fieldLabel}>{node.label}</span>}
+      {node.label !== undefined && <span className={css.fieldLabel}>{renderInline(node.label, false)}</span>}
       {options.map((opt, i) => (
         <label key={i} className={css.radio}>
           <input
@@ -68,7 +69,7 @@ export function RadioNode({ node, onAction, answers }: {
               }
             }}
           />
-          <span>{opt}</span>
+          <span>{renderInline(opt, false)}</span>
         </label>
       ))}
     </div>
@@ -151,21 +152,21 @@ export function SubmitNode({ node, onAction, answers }: {
             if (correct === undefined) {
               return (
                 <div key={g} className={css.gradeItem}>
-                  <span className={css.gradeQ}>{m.label}</span>
-                  <span className={css.gradeAns}>你的答案：{entry}</span>
+                  <span className={css.gradeQ}>{renderInline(m.label)}</span>
+                  <span className={css.gradeAns}>你的答案：{renderInline(entry)}</span>
                 </div>
               )
             }
             const isCorrect = entry === correct
             return (
               <div key={g} className={`${css.gradeItem} ${isCorrect ? css.gradeItemOk : css.gradeItemNo}`}>
-                <span className={css.gradeQ}>{m.label}</span>
+                <span className={css.gradeQ}>{renderInline(m.label)}</span>
                 <span className={css.gradeTag}>{isCorrect ? '✓' : '✗'}</span>
                 <span className={css.gradeAns}>
-                  你的答案：{entry}
-                  {!isCorrect && <span className={css.gradeRight}> 正确答案：{correct}</span>}
+                  你的答案：{renderInline(entry)}
+                  {!isCorrect && <span className={css.gradeRight}> 正确答案：{renderInline(correct ?? '')}</span>}
                 </span>
-                {m.explanation !== undefined && <span className={css.gradeExp}>{m.explanation}</span>}
+                {m.explanation !== undefined && <span className={css.gradeExp}>{renderInline(m.explanation)}</span>}
               </div>
             )
           })}
@@ -209,7 +210,7 @@ export function SubmitNode({ node, onAction, answers }: {
           }
         } : undefined}
       >
-        {node.label}
+        {renderInline(node.label, false)}
       </button>
       {total > 0 && <span className={css.submitHint} aria-live="polite">已选 {answered}/{total}</span>}
     </div>
@@ -222,7 +223,7 @@ export function SwitchNode({ node, onAction }: { node: GenuiSwitch; onAction?: G
   const action = node.action
   return (
     <label className={css.switchRow}>
-      <span className={css.switchLabel}>{node.label}</span>
+      <span className={css.switchLabel}>{renderInline(node.label, false)}</span>
       <button
         type="button"
         role="switch"
@@ -271,7 +272,7 @@ export function SliderNode({ node, onAction, answers }: {
   }
   return (
     <label className={css.sliderRow}>
-      {node.label !== undefined && <span className={css.fieldLabel}>{node.label}</span>}
+      {node.label !== undefined && <span className={css.fieldLabel}>{renderInline(node.label, false)}</span>}
       <input
         type="range"
         className={css.sliderInput}
@@ -372,7 +373,7 @@ export function SelectNode({ node, onAction, answers }: {
   }
   return (
     <label className={css.field}>
-      {node.label !== undefined && <span>{node.label}</span>}
+      {node.label !== undefined && <span>{renderInline(node.label, false)}</span>}
       <select
         className={css.select}
         value={value ?? ''}
@@ -445,7 +446,7 @@ export function InputNode({ node, onAction, answers }: {
   }, [secret, id])
   return (
     <label className={css.field}>
-      {node.label !== undefined && <span>{node.label}</span>}
+      {node.label !== undefined && <span>{renderInline(node.label, false)}</span>}
       <input
         className={css.input}
         type={node.inputType ?? 'text'}
@@ -515,7 +516,7 @@ export function TextareaNode({ node, onAction, answers }: {
   }, [])
   return (
     <label className={css.field}>
-      {node.label !== undefined && <span>{node.label}</span>}
+      {node.label !== undefined && <span>{renderInline(node.label, false)}</span>}
       <textarea
         className={css.textarea}
         placeholder={node.placeholder}
