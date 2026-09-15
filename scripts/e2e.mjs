@@ -343,6 +343,49 @@ try {
     }
     log('图表深浅主题往返切换、节点配色及窄图例验证通过')
 
+    // Exercise every math-bearing field against the installed host and fonts.
+    await page.evaluate(() => {
+      const fixture = document.createElement('div')
+      fixture.setAttribute('data-math-smoke', '')
+      fixture.style.width = '320px'
+      const host = document.createElement('div')
+      host.className = 'md-code-block'
+      const label = document.createElement('div')
+      label.textContent = '  dsh-ui\n'
+      const pre = document.createElement('pre')
+      pre.textContent = JSON.stringify({ items: [
+        { type: 'text', content: 'Energy $E=mc^2$; $$\\frac{a}{b}$$' },
+        { type: 'list', items: ['Value $x^2$', { title: '$a+b$', desc: '$c+d$' }] },
+        { type: 'table', columns: ['Formula'], rows: [['$x+y$']] },
+        { type: 'keyvalue', pairs: [{ key: 'Result', value: '$z^2$' }] },
+        { type: 'callout', title: '$a^2$', content: '$b^2$' },
+      ] })
+      host.append(label, pre)
+      fixture.append(host)
+      document.body.prepend(fixture)
+    })
+    const math = page.locator('[data-math-smoke] [data-genui]')
+    await math.waitFor({ state: 'visible' })
+    assert.equal(await math.locator('.katex').count(), 9, '所有富文本字段均渲染公式')
+    assert.equal(await math.locator('.katex-display').count(), 1, '块公式独立显示')
+    await page.evaluate(() => document.fonts.ready)
+    for (const mode of ['light', 'dark']) {
+      await page.emulateMedia({ colorScheme: mode })
+      await page.waitForFunction(dark => document.body.hasAttribute('data-ds-dark-theme') === dark, mode === 'dark')
+      const geometry = await math.evaluate(element => {
+        const formula = element.querySelector('.katex')
+        const parent = formula.closest('[class*="inlineMath"]')
+        const box = formula.getBoundingClientRect()
+        return { width: box.width, height: box.height, color: getComputedStyle(formula).color,
+          inheritedColor: getComputedStyle(parent).color, overflow: element.scrollWidth > element.clientWidth + 1 }
+      })
+      assert.ok(geometry.width > 10 && geometry.height > 10)
+      assert.equal(geometry.color, geometry.inheritedColor)
+      assert.equal(geometry.overflow, false, '320px 窄卡公式不撑破布局')
+      await math.screenshot({ path: join(artifactsDir, `math-${mode}.png`) })
+    }
+    if (pageErrors.length > 0) throw new Error(`公式渲染异常: ${pageErrors.join(' | ')}`)
+    log('公式跨字段、深浅主题、窄卡布局和空白标签识别验证通过')
     log('smoke 模式：安装、激活、Diff/Code/JSON 真实渲染及复制均通过')
     await browser.close()
     await cleanup()

@@ -164,11 +164,11 @@ function formatProcessFailure(processed: GenuiProcessResult): string | undefined
   return chartErrors.length === 0 ? undefined : `❌ chart 字段验证失败：\n- ${chartErrors.join('\n- ')}`
 }
 
-/** Return the legacy validation text for a process that dropped native nodes. */
+/** Report dropped components without hiding their actionable field errors. */
 function droppedNodeFailure(processed: GenuiProcessResult): string | undefined {
   if (!processed.errors.some(error => error.startsWith('repair dropped '))) return undefined
   const dropped = processed.declaredNativeCount - processed.renderedNativeCount
-  return `❌ 验证未通过：检测到声明了 ${processed.declaredNativeCount} 个组件，但仅成功解析出 ${processed.renderedNativeCount} 个（有 ${dropped} 个组件因字段格式异常被丢弃）。常见原因：table 的 columns/rows 不是二维字符串数组、tabs 的 items/content 缺失、嵌套组件字段类型不符。请修正后重新验证。`
+  return `❌ 验证未通过：检测到声明了 ${processed.declaredNativeCount} 个组件，但仅成功解析出 ${processed.renderedNativeCount} 个（有 ${dropped} 个组件因字段格式异常被丢弃）。请修正后重新验证。\n- ${processed.errors.join('\n- ')}`
 }
 
 /** Tool-call title shared by the pending and completed presentations. */

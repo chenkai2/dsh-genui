@@ -100,6 +100,42 @@ describe('installDomFenceRenderer', () => {
     expect([...inject].sort()).toEqual(['sessions', 'slots'])
   })
 
+  it('accepts surrounding whitespace in a language label', async () => {
+    const block = stockCodeBlock(VALID_SPEC, '  dsh-ui\n')
+    document.body.appendChild(block)
+    const send = vi.fn()
+    const dispose = installDomFenceRenderer(makeCtx('sess-1', send), send)
+    try {
+      expect(await waitFor(() => block.hasAttribute('data-genui-rendered'))).toBe(true)
+    } finally { dispose() }
+  })
+
+  it('diagnoses each rejected known surface once without hiding its prose', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const blocks = [0, 1].map(() => {
+      const block = stockCodeBlock(VALID_SPEC, 'dsh-ui')
+      const prose = document.createElement('p')
+      prose.textContent = 'Keep this answer visible'
+      block.appendChild(prose)
+      document.body.appendChild(block)
+      return block
+    })
+    const send = vi.fn()
+    const dispose = installDomFenceRenderer(makeCtx('sess-1', send), send)
+    try {
+      await tick(100)
+      blocks[0]!.setAttribute('data-update', '1')
+      await tick(100)
+      const diagnostics = warn.mock.calls.filter(args => String(args[0]).includes('pre=1'))
+      expect(diagnostics).toHaveLength(2)
+      expect(diagnostics.every(args => String(args[0]).includes('p'))).toBe(true)
+      for (const block of blocks) {
+        expect(block.style.display).not.toBe('none')
+        expect(block.hasAttribute('data-genui-rendered')).toBe(false)
+      }
+    } finally { dispose() }
+  })
+
   it('renders a settled dsh-ui fence into its own root and hides the stock block', async () => {
     const row = assistantRow('s7')
     const block = stockCodeBlock(VALID_SPEC, 'dsh-ui')

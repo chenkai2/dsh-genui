@@ -2153,3 +2153,10 @@ button.ftNameBtn[aria-expanded] { cursor: pointer; }
 .panelResizeHandleActive {
   background: color-mix(in srgb, var(--dsw-alias-state-business-primary, #4f8ef7) 35%, transparent);
 }
+
+/* Host MarkdownText owns math parsing, accessibility and fonts; only flatten
+   its paragraph wrappers so inline formulas keep the surrounding typography. */
+.inlineMath { display: inline; }
+.inlineMath > div { display: contents; }
+.inlineMath > div > p { display: inline; margin: 0; font: inherit; }
+.inlineMath [class~="katex-display"] { overflow-x: auto; overflow-y: hidden; }
