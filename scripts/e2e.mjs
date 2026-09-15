@@ -353,12 +353,19 @@ try {
       const label = document.createElement('div')
       label.textContent = '  dsh-ui\n'
       const pre = document.createElement('pre')
-      pre.textContent = JSON.stringify({ items: [
-        { type: 'text', content: 'Energy $E=mc^2$; $$\\frac{a}{b}$$' },
-        { type: 'list', items: ['Value $x^2$', { title: '$a+b$', desc: '$c+d$' }] },
-        { type: 'table', columns: ['Formula'], rows: [['$x+y$']] },
+      pre.textContent = JSON.stringify({ title: '\\(x^2\\)', items: [
+        { type: 'text', content: 'Energy **\\(E=mc^2\\)**; $$\\begin{pmatrix}a&b\\\\c&d\\end{pmatrix}$$' },
+        { type: 'list', items: ['Value ==\\(x^2\\)==', { title: '$a+b$', desc: '$c+d$' }] },
+        { type: 'table', columns: ['\\(x\\)'], rows: [['$x+y$']] },
         { type: 'keyvalue', pairs: [{ key: 'Result', value: '$z^2$' }] },
         { type: 'callout', title: '$a^2$', content: '$b^2$' },
+        { type: 'steps', steps: [{ title: '\\(a=b\\)', desc: '\\[\\begin{aligned}a&=b+c\\\\&=d\\end{aligned}\\]' }] },
+        { type: 'timeline', items: [{ title: '\\(x\\)', desc: '\\[f(x)=\\begin{cases}x&x>0\\\\-x&x<0\\end{cases}\\]' }] },
+        { type: 'card', title: '\\(a+b\\)', items: [] },
+        { type: 'quiz', question: '\\(x^2\\)', options: [{ label: '\\(4\\)', correct: true }] },
+        { type: 'tabs', tabs: [{ label: '\\(x\\)', items: [] }] },
+        { type: 'input', label: '\\(y\\)' },
+        { type: 'button', label: '\\(z\\)' },
       ] })
       host.append(label, pre)
       fixture.append(host)
@@ -366,8 +373,9 @@ try {
     })
     const math = page.locator('[data-math-smoke] [data-genui]')
     await math.waitFor({ state: 'visible' })
-    assert.equal(await math.locator('.katex').count(), 9, '所有富文本字段均渲染公式')
-    assert.equal(await math.locator('.katex-display').count(), 1, '块公式独立显示')
+    assert.equal(await math.locator('.katex').count(), 21, '所有覆盖的文字字段均渲染公式')
+    assert.equal(await math.locator('.katex-display').count(), 3, '矩阵、分段函数、多行推导独立显示')
+    assert.equal(await math.locator('.katex-error').count(), 0, '公式解析无错误')
     await page.evaluate(() => document.fonts.ready)
     for (const mode of ['light', 'dark']) {
       await page.emulateMedia({ colorScheme: mode })

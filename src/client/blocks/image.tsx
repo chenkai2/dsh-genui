@@ -1,3 +1,4 @@
+import { renderInline } from '../inline.ts'
 import { useState, type ReactNode } from 'react'
 import css from '../GenuiBlock.module.css'
 import type { GenuiImage } from '../spec.ts'
@@ -8,7 +9,7 @@ export function ImageNode({ node }: { node: GenuiImage }): ReactNode {
 
   return (
     <figure className={css.media}>
-      {node.alt !== undefined && <figcaption className={css.mediaLabel}>{node.alt}</figcaption>}
+      {node.alt !== undefined && <figcaption className={css.mediaLabel}>{renderInline(node.alt)}</figcaption>}
       {failed
         ? <div className={css.mediaError} role="alert">图片无法加载</div>
         : <img
