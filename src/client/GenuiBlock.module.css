@@ -156,12 +156,10 @@ body[data-ds-dark-theme] .panel {
      above the page (21,21,23) and read as "a black box". layer-2 (44,44,46) is
      the host's own elevated surface; light theme maps all layers to one colour,
      so this changes nothing there. */
-  /* Reading hosts can present groups as sections without changing the
-     surfaces of tables, inputs or other components inside them. */
-  background: var(--dsl-g-card-background, var(--dsl-g-surface));
-  border: var(--dsl-g-card-border-width, 1px) solid var(--dsl-g-border-surface);
+  background: var(--dsl-g-surface);
+  border: 1px solid var(--dsl-g-border-surface);
   border-radius: var(--dsl-g-radius-surface);
-  padding: var(--dsl-g-card-padding, var(--dsl-g-gap-lg));
+  padding: var(--dsl-g-gap-lg);
   display: flex;
   flex-direction: column;
   gap: var(--dsl-g-gap-md);
