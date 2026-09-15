@@ -127,6 +127,9 @@ body[data-ds-dark-theme] .panel {
 .col { display: flex; flex-direction: column; gap: var(--dsl-g-gap-md); }
 .row { display: flex; align-items: center; gap: var(--dsl-g-gap-md); }
 .row.wrap { flex-wrap: wrap; }
+/* Cards contain fluid charts/tables: divide the available row, not their
+   min-content widths (which can collapse a horizontal chart's tracks). */
+.row > .card { flex: 1 1 0; align-self: stretch; }
 .grid { display: grid; gap: var(--dsl-g-gap-md); }
 /* Bento child: occupies N grid columns (the wrapper exists only so the child
    keeps its own layout). */
@@ -138,6 +141,7 @@ body[data-ds-dark-theme] .panel {
 @media (max-width: 560px) {
   .grid { grid-template-columns: 1fr !important; }
   .row { flex-wrap: wrap; }
+  .row > .card { flex-basis: 100%; }
 }
 .spacer { flex: 1; }
 .divider {
@@ -152,10 +156,12 @@ body[data-ds-dark-theme] .panel {
      above the page (21,21,23) and read as "a black box". layer-2 (44,44,46) is
      the host's own elevated surface; light theme maps all layers to one colour,
      so this changes nothing there. */
-  background: var(--dsl-g-surface);
-  border: 1px solid var(--dsl-g-border-surface);
+  /* Reading hosts can present groups as sections without changing the
+     surfaces of tables, inputs or other components inside them. */
+  background: var(--dsl-g-card-background, var(--dsl-g-surface));
+  border: var(--dsl-g-card-border-width, 1px) solid var(--dsl-g-border-surface);
   border-radius: var(--dsl-g-radius-surface);
-  padding: var(--dsl-g-gap-lg);
+  padding: var(--dsl-g-card-padding, var(--dsl-g-gap-lg));
   display: flex;
   flex-direction: column;
   gap: var(--dsl-g-gap-md);
