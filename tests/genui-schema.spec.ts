@@ -128,6 +128,39 @@ describe('GenUI runtime schema normalization', () => {
     ])
   })
 
+  it('derives table columns from a headerless 2D rows/data body', () => {
+    // Real-session sample: the model ships `{type:'table', data:[[…],[…]]}`
+    // with no `columns`. Before this, repair dropped the node and the whole
+    // fence degraded to a code block; now the leading row becomes the header.
+    const headed = processGenuiSpec({ items: [
+      { type: 'table', data: [['#', '任务'], ['t1', '后端'], ['t2', '前端']] },
+    ] })
+    expect(headed.errors).toEqual([])
+    expect(headed.repaired?.items).toEqual([
+      { type: 'table', columns: ['#', '任务'], rows: [['t1', '后端'], ['t2', '前端']] },
+    ])
+
+    // Ragged body: the leading row is data, so the columns are neutral names
+    // rather than a fabricated header taken from that row's text.
+    const ragged = processGenuiSpec({ items: [
+      { type: 'table', rows: [['a', 'b', 'c'], ['1']] },
+    ] })
+    expect(ragged.errors).toEqual([])
+    expect(ragged.repaired?.items).toEqual([
+      { type: 'table', columns: ['列1', '列2', '列3'], rows: [['a', 'b', 'c'], ['1']] },
+    ])
+
+    // Header-only capture stays a (header) table with an empty body.
+    expect(processGenuiSpec({ items: [{ type: 'table', rows: [['名称', '结果']] }] }).repaired?.items)
+      .toEqual([{ type: 'table', columns: ['名称', '结果'], rows: [] }])
+
+    // A non-2D body is still a contract error, not something to invent from.
+    expect(processGenuiSpec({ items: [{ type: 'table', rows: 42 }] }).errors)
+      .toContain("items[0]: type 'table' requires rows (array)")
+    expect(processGenuiSpec({ items: [{ type: 'table', rows: [] }] }).errors)
+      .toContain("items[0]: type 'table' requires columns (array)")
+  })
+
   it('warns for native unknown fields but keeps custom nodes opaque', () => {
     const native = diagnoseUnknownGenuiFields({ items: [
       { type: 'callout', content: 'x', typo: true },

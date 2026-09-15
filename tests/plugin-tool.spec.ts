@@ -4,6 +4,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createRenderUiTool, createValidateDshUiTool } from '../src/plugin/tool.ts'
 import { GENUI_LIMITS } from '../src/client/genui-runtime/index.ts'
+import { processGenuiSpec } from '../src/client/guard.ts'
 
 const tool = createRenderUiTool()
 
@@ -218,14 +219,50 @@ describe('validate_dsh_ui tool', () => {
   })
 
   it.each([
-    [{ type: 'keyvalue', items: [{ key: 'a', value: 'b' }] }, 'pairs'],
-    [{ type: 'diff', items: [{ text: 'x' }] }, 'diffs'],
-    [{ type: 'table', columns: {}, rows: 42 }, 'columns'],
-    [{ type: 'callout', text: 'hello' }, 'content'],
+    // Real-session samples (2 sessions, 62 fences): the model names the field
+    // by intent and the alias registry adopts it. Asserting the whole
+    // validate verdict — not just the warning — pins the load-bearing claim:
+    // these bodies now RENDER, so the fence cannot degrade to raw JSON.
+    [{ type: 'keyvalue', items: [{ key: 'a', value: 'b' }] }, { type: 'keyvalue', pairs: [{ key: 'a', value: 'b' }] }],
+    [{ type: 'callout', text: 'hello' }, { type: 'callout', content: 'hello' }],
+    [{ type: 'callout', body: 'hello' }, { type: 'callout', content: 'hello' }],
+    [{ type: 'code', content: 'x = 1' }, { type: 'code', code: 'x = 1' }],
+    [{ type: 'copy', content: 'x = 1' }, { type: 'copy', text: 'x = 1' }],
+    [{ type: 'image', url: 'https://example.com/a.png' }, { type: 'image', src: 'https://example.com/a.png' }],
+  ])('adopts the model field name for %j instead of dropping the node', async (node, canonical) => {
+    const value = String(await vtool.execute({ spec: { items: [node] } }))
+    expect(value).toContain('✅')
+    expect(value).toContain('已规范化字段')
+    expect(value).toContain('可以发出围栏')
+    expect(processGenuiSpec({ items: [node] }).repaired?.items).toEqual([canonical])
+  })
+
+  it('adopts quiz title/choices and still grades against string options', async () => {
+    const node = { type: 'quiz', title: '问题', choices: ['甲', '乙'] }
+    const value = String(await vtool.execute({ spec: { items: [node] } }))
+    expect(value).toContain('✅')
+    // quiz repair canonicalizes options into `{label}` records (correctness
+    // lives per option), so the claim under test is the adopted field names.
+    expect(processGenuiSpec({ items: [node] }).repaired?.items).toEqual([
+      { type: 'quiz', question: '问题', options: [{ label: '甲' }, { label: '乙' }] },
+    ])
+  })
+
+  it('drops malformed tables but explains the columns/rows contract', async () => {
+    // Filtering still matters: a non-2D body is not a table we can rescue.
+    const value = String(await vtool.execute({ spec: '{"items":[{"type":"table","rows":42}]}' }))
+    expect(value).toContain('❌')
+    expect(value).toContain("items[0]: type 'table' requires rows (array)")
+  })
+
+  it.each([
+    [{ type: 'keyvalue', pairs: 'k=v' }, 'items[0]: type \'keyvalue\' requires pairs (array)'],
+    [{ type: 'diff', items: [{ text: 'x' }] }, 'items[0].diffs[0]: requires path (a string)'],
+    [{ type: 'table', columns: {}, rows: 42 }, "items[0]: type 'table' requires columns (array)"],
   ])('keeps field errors when invalid components are dropped: %j', async (node, field) => {
     const value = String(await vtool.execute({ spec: { items: [node] } }))
     expect(value).toContain('❌')
-    expect(value).toContain(`items[0]: type '${node.type}' requires ${field}`)
+    expect(value).toContain(field)
   })
 
   it('reports native drop counts without counting opaque custom nodes', async () => {
