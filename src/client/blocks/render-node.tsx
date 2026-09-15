@@ -166,8 +166,8 @@ function AnimatedValue({ value, unitClass, animate = false }: {
   const animated = useCountUp(target ?? 0, parts.decimals, animate && target !== undefined)
   return (
     <>
-      {target === undefined ? parts.num : animated}
-      {parts.unit !== '' && <span className={unitClass ?? css.statUnit}>{parts.unit}</span>}
+      {target === undefined ? renderInline(parts.num) : animated}
+      {parts.unit !== '' && <span className={unitClass ?? css.statUnit}>{renderInline(parts.unit)}</span>}
     </>
   )
 }
@@ -252,7 +252,7 @@ export function renderNode(
       } as CSSProperties
       return (
         <div key={key} className={`${css.card}${toneClass}`} style={accentStyle}>
-          {node.title !== undefined && <div className={css.cardTitle}>{node.title}</div>}
+          {node.title !== undefined && <div className={css.cardTitle}>{renderInline(node.title)}</div>}
           {node.items.map((c, i) => renderNode(c, i, onAction, depth + 1, answers))}
         </div>
       )
@@ -273,7 +273,7 @@ export function renderNode(
           onClick={interactive ? () => onAction(action, { type: 'button', label: node.label }) : undefined}
         >
           {node.icon !== undefined && <span aria-hidden>{node.icon} </span>}
-          {node.label}
+          {renderInline(node.label, false)}
         </ClickFeedbackButton>
       )
     }
@@ -286,8 +286,8 @@ export function renderNode(
       // was the same complaint class as the disabled-button fix).
       const href = node.href
       return href !== undefined
-        ? <a key={key} className={css.link} href={href} target="_blank" rel="noopener noreferrer">{node.label}</a>
-        : <span key={key} className={css.linkText}>{node.label}</span>
+        ? <a key={key} className={css.link} href={href} target="_blank" rel="noopener noreferrer">{renderInline(node.label, false)}</a>
+        : <span key={key} className={css.linkText}>{renderInline(node.label, false)}</span>
     }
     case 'image': return <ImageNode key={`${key}:${node.src}`} node={node} />
     case 'audio': return <AudioNode key={`${key}:${node.src}`} node={node} />
@@ -297,7 +297,7 @@ export function renderNode(
       return (
         <span key={key} className={`${css.badge} ${css[tone] || ''}`}>
           {node.icon !== undefined && <span aria-hidden>{node.icon} </span>}
-          {node.label}
+          {renderInline(node.label, false)}
         </span>
       )
     }
@@ -307,18 +307,18 @@ export function renderNode(
       const heroDown = node.delta !== undefined && node.delta.startsWith('-')
       return (
         <div key={key} className={`${css.hero} ${heroTone}`}>
-          {node.label !== undefined && <span className={css.heroLabel}>{node.label}</span>}
+          {node.label !== undefined && <span className={css.heroLabel}>{renderInline(node.label, false)}</span>}
           <div className={css.heroTop}>
             {node.value !== undefined && (
               <span className={css.heroValue}><AnimatedValue value={node.value} unitClass={css.heroUnit} animate /></span>
             )}
             {node.delta !== undefined && (
-              <span className={`${css.statDelta} ${heroDown ? css.down : css.up}`}>{node.delta}</span>
+              <span className={`${css.statDelta} ${heroDown ? css.down : css.up}`}>{renderInline(node.delta)}</span>
             )}
             {node.spark !== undefined && <span className={css.heroSpark}><Sparkline values={node.spark} /></span>}
           </div>
-          <span className={css.heroTitle}>{node.title}</span>
-          {node.subtitle !== undefined && <span className={css.heroSubtitle}>{node.subtitle}</span>}
+          <span className={css.heroTitle}>{renderInline(node.title)}</span>
+          {node.subtitle !== undefined && <span className={css.heroSubtitle}>{renderInline(node.subtitle)}</span>}
         </div>
       )
     }
@@ -326,11 +326,11 @@ export function renderNode(
       const down = node.delta !== undefined && node.delta.startsWith('-')
       return (
         <div key={key} className={`${css.stat}${node.size === 'hero' ? ` ${css.statHero}` : ''}`}>
-          <span className={css.statLabel}>{node.label}</span>
+          <span className={css.statLabel}>{renderInline(node.label, false)}</span>
           <span className={css.statValue}>
             <AnimatedValue value={node.value} animate={node.size === 'hero'} />
           </span>
-          {node.delta !== undefined && <span className={`${css.statDelta} ${down ? css.down : css.up}`}>{node.delta}</span>}
+          {node.delta !== undefined && <span className={`${css.statDelta} ${down ? css.down : css.up}`}>{renderInline(node.delta)}</span>}
           {node.spark !== undefined && <Sparkline values={node.spark} />}
         </div>
       )
@@ -368,8 +368,8 @@ export function renderNode(
             </svg>
             {(node.label !== undefined || node.valueLabel !== undefined) && (
               <div className={css.ringMeta}>
-                {node.label !== undefined && <span className={css.ringLabel}>{node.label}</span>}
-                {node.valueLabel !== undefined && <span className={css.ringSub}>{node.valueLabel}</span>}
+                {node.label !== undefined && <span className={css.ringLabel}>{renderInline(node.label, false)}</span>}
+                {node.valueLabel !== undefined && <span className={css.ringSub}>{renderInline(node.valueLabel)}</span>}
               </div>
             )}
           </div>
@@ -387,8 +387,8 @@ export function renderNode(
         >
           {(node.label !== undefined || node.valueLabel !== undefined) && (
             <div className={css.progressRow}>
-              <span>{node.label}</span>
-              {node.valueLabel !== undefined && <span>{node.valueLabel}</span>}
+              <span>{renderInline(node.label ?? '')}</span>
+              {node.valueLabel !== undefined && <span>{renderInline(node.valueLabel)}</span>}
             </div>
           )}
           <div className={css.track}>

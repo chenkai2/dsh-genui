@@ -6,6 +6,7 @@
  * durable localStorage persistence, action debounce); the per-family
  * components live in src/client/blocks/*.
  */
+import { renderInline } from './inline.ts'
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useGenuiAction } from './action-context.ts'
 import css from './GenuiBlock.module.css'
@@ -178,7 +179,7 @@ function GenuiBlockInstance({ spec, stateKey, animateEntrance = true, initialSta
   }, [spec])
   return (
     <div className={css.block} data-genui>
-      {spec.title !== undefined && <div className={css.banner}>{spec.title}</div>}
+      {spec.title !== undefined && <div className={css.banner}>{renderInline(spec.title)}</div>}
       <div className={css.col} style={{ gap: `${gap}px` }}>
         {spec.items.map((c, i) => (
           // Staggered reveal: each root item fades/slides in after its

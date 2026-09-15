@@ -11,6 +11,7 @@
  * `type` to `echart` and adding `preset`.
  * @module @changfenhuang/dsh-genui/client/EChartNode
  */
+import { renderInline } from './inline.ts'
 import { useEffect, useRef, useState } from 'react'
 import css from './GenuiBlock.module.css'
 import { CORE_PRESETS, createChart as lazyCreateChart, type EChartsInstance } from './echarts-lazy.ts'
@@ -435,14 +436,14 @@ export function EChartNode({ node }: { node: GenuiEChart }) {
     return (
       <div className={css.echartFallback} data-genui-echart>
         <div className={css.echartErr}>ECharts 渲染失败</div>
-        {node.title !== undefined && <div className={css.echartHint}>{node.title}</div>}
+        {node.title !== undefined && <div className={css.echartHint}>{renderInline(node.title)}</div>}
       </div>
     )
   }
 
   return (
     <div className={css.echartWrap} data-genui-echart>
-      {node.title !== undefined && <div className={css.echartTitle}>{node.title}</div>}
+      {node.title !== undefined && <div className={css.echartTitle}>{renderInline(node.title)}</div>}
       <div
         ref={ref}
         className={css.echartCanvas}

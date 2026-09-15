@@ -95,7 +95,7 @@ function deltaTone(value: unknown): 'up' | 'down' | null {
  *  trend line (area wash + end dot, same geometry as stat.spark). */
 function CellSpark({ cell }: { cell: string | number }) {
   const values = String(cell).split(/[\s,;]+/).map(Number).filter(Number.isFinite)
-  if (values.length < 2) return <>{String(cell)}</>
+  if (values.length < 2) return <>{renderInline(String(cell), false)}</>
   const W = 88
   const H = 22
   const pad = 2
@@ -131,7 +131,7 @@ function CellRing({ cell }: { cell: string | number }) {
           strokeDasharray={`${(pct / 100) * C} ${C}`} transform="rotate(-90 14 14)"
         />
       </svg>
-      <span className={css.cellRingText}>{String(cell)}</span>
+      <span className={css.cellRingText}>{renderInline(String(cell), false)}</span>
     </span>
   )
 }
@@ -185,7 +185,7 @@ function CellBar({ cell }: { cell: string | number }) {
   return (
     <span className={css.cellBar}>
       <span className={css.cellBarFill} style={{ width: `${pct}%` }} />
-      <span className={css.cellBarText}>{String(cell)}</span>
+      <span className={css.cellBarText}>{renderInline(String(cell), false)}</span>
     </span>
   )
 }
@@ -309,7 +309,7 @@ export const TableNode = memo(function TableNode({ node, renderDetail, filterVal
     return (
       <td key={j} className={numeric[j] || type === 'num' ? css.tdNum : undefined}>
         {type === 'badge'
-          ? <span className={css.cellBadge}>{String(cell)}</span>
+          ? <span className={css.cellBadge}>{renderInline(String(cell), false)}</span>
           : type === 'bar'
             ? <CellBar cell={cell} />
             : type === 'spark'
@@ -319,10 +319,9 @@ export const TableNode = memo(function TableNode({ node, renderDetail, filterVal
                 : type === 'index'
                   ? <span className={css.cellIndex}>{rowIndex + 1}</span>
                   : tone === null
-                    // Text cells honour inline markup; numeric/badge/spark
-                    // cells stay literal (a number has nothing to emphasise).
-                    ? renderInline(String(cell))
-                    : <span className={`${css.tdDelta} ${tone === 'up' ? css.tdDeltaUp : css.tdDeltaDown}`}>{String(cell)}</span>}
+                    // Format displayed text without changing sorting or exported data.
+                    ? renderInline(String(cell), false)
+                    : <span className={`${css.tdDelta} ${tone === 'up' ? css.tdDeltaUp : css.tdDeltaDown}`}>{renderInline(String(cell), false)}</span>}
       </td>
     )
   }
@@ -340,7 +339,7 @@ export const TableNode = memo(function TableNode({ node, renderDetail, filterVal
                 aria-sort={sort !== null && sort.col === i ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}
               >
                 <button type="button" className={css.thSort} onClick={() => clickHeader(i)}>
-                  {c}
+                  {renderInline(c, false)}
                   {sort !== null && sort.col === i && <span className={css.thSortMark} aria-hidden>{sort.dir === 1 ? ' ▲' : ' ▼'}</span>}
                 </button>
               </th>
@@ -363,7 +362,7 @@ export const TableNode = memo(function TableNode({ node, renderDetail, filterVal
                         onClick={() => toggleSection(headerIndex)}
                       >
                         <span className={css.groupChevron} aria-hidden>{isCollapsed ? '▸' : '▾'}</span>
-                        {String(section.header.row[0])}
+                        {renderInline(String(section.header.row[0]), false)}
                         <span className={css.groupCount}>{section.children.length}</span>
                       </button>
                     </td>
@@ -386,7 +385,7 @@ export const TableNode = memo(function TableNode({ node, renderDetail, filterVal
                                   onClick={() => toggleDetail(child.index)}
                                 >
                                   <span className={css.detailChevron} data-open={open} aria-hidden>▸</span>
-                                  {String(cell)}
+                                  {renderInline(String(cell), false)}
                                 </button>
                               </td>
                             )
@@ -470,8 +469,8 @@ function ChartTip({ tip }: { tip: TipState | null }) {
     <div className={css.chartTip} style={{ left: `${tip.x}px`, top: `${tip.y}px` }} role="tooltip">
       {tip.rows.map(([label, value], i) => (
         <span key={`${label}-${i}`} className={css.chartTipRow}>
-          <span>{label}</span>
-          <span className={css.chartTipValue}>{value}</span>
+          <span>{renderInline(label)}</span>
+          <span className={css.chartTipValue}>{renderInline(String(value))}</span>
         </span>
       ))}
     </div>
@@ -594,7 +593,7 @@ export const BarsNode = memo(function BarsNode({ chart }: { chart: GenuiChart })
           {grouped.map((entry, si) => (
             <span key={si} className={css.legendItem}>
               <span className={css.legendSwatch} style={{ background: colors[si] }} />
-              {entry.label}
+              {renderInline(entry.label)}
             </span>
           ))}
         </div>
@@ -605,7 +604,7 @@ export const BarsNode = memo(function BarsNode({ chart }: { chart: GenuiChart })
         <div className={css.hbars}>
           {labels.map((label, i) => (
             <div key={i} className={css.hbarRow}>
-              <span className={css.hbarLabel} title={label}>{label}</span>
+              <span className={css.hbarLabel} title={label}>{renderInline(label)}</span>
               <div className={css.hbarTracks}>
                 {stacked
                   ? (
@@ -758,14 +757,14 @@ export const BarsNode = memo(function BarsNode({ chart }: { chart: GenuiChart })
         </div>
       </div>
       <div className={css.chartLabels}>
-        {labels.map((label, i) => <span key={`${label}-${i}`} className={css.barLabel}>{label}</span>)}
+        {labels.map((label, i) => <span key={`${label}-${i}`} className={css.barLabel}>{renderInline(label)}</span>)}
       </div>
       {isGrouped && (
         <div className={css.chartLegend}>
           {grouped.map((entry, si) => (
             <span key={si} className={css.legendItem}>
               <span className={css.legendSwatch} style={{ background: colors[si] }} />
-              {entry.label}
+              {renderInline(entry.label)}
             </span>
           ))}
         </div>
@@ -864,7 +863,7 @@ export const LineChartNode = memo(function LineChartNode({ chart }: { chart: Gen
           {grouped!.map((entry, si) => (
             <span key={si} className={css.legendItem}>
               <span className={css.legendSwatch} style={{ background: colors[si] }} />
-              {entry.label}
+              {renderInline(entry.label)}
             </span>
           ))}
         </div>
@@ -926,7 +925,7 @@ export const DonutNode = memo(function DonutNode({ chart }: { chart: GenuiChart 
         {clamped.map((d, i) => (
           <span key={i} className={css.legendItem}>
             <span className={css.legendSwatch} style={{ background: seriesColor(i, data.length, d.color, chart.palette) ?? 'var(--dsw-alias-state-business-primary, #4f8ef7)' }} />
-            <span>{d.label}</span>
+            <span>{renderInline(d.label)}</span>
             <span className={css.donutPct}>{String(d.value)} · {(d.v / total * 100).toFixed(1)}%</span>
           </span>
         ))}
