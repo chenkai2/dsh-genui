@@ -127,6 +127,9 @@ body[data-ds-dark-theme] .panel {
 .col { display: flex; flex-direction: column; gap: var(--dsl-g-gap-md); }
 .row { display: flex; align-items: center; gap: var(--dsl-g-gap-md); }
 .row.wrap { flex-wrap: wrap; }
+/* Cards contain fluid charts/tables: divide the available row, not their
+   min-content widths (which can collapse a horizontal chart's tracks). */
+.row > .card { flex: 1 1 0; align-self: stretch; }
 .grid { display: grid; gap: var(--dsl-g-gap-md); }
 /* Bento child: occupies N grid columns (the wrapper exists only so the child
    keeps its own layout). */
@@ -138,6 +141,7 @@ body[data-ds-dark-theme] .panel {
 @media (max-width: 560px) {
   .grid { grid-template-columns: 1fr !important; }
   .row { flex-wrap: wrap; }
+  .row > .card { flex-basis: 100%; }
 }
 .spacer { flex: 1; }
 .divider {

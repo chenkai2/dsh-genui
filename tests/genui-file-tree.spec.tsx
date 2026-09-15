@@ -165,7 +165,7 @@ describe('surface elevation contract', () => {
     const css = readFileSync(join(process.cwd(), 'src/client/GenuiBlock.module.css'), 'utf8')
     // Dark theme: page 21,21,23 → layer-1 35,35,36 (only 14 units: "a black
     // box") → layer-2 44,44,46. Cards, stats and callouts must sit on layer-2.
-    const card = /\.card \{([^}]*)\}/.exec(css)
+    const card = /^\s*\.card \{([^}]*)\}/m.exec(css)
     expect(card, '.card rule must exist').not.toBeNull()
     expect(card![1]).toMatch(/background: var\(--dsl-g-surface\)/)
     const stat = /\.stat \{([^}]*)\}/.exec(css)
@@ -183,7 +183,7 @@ describe('surface elevation contract', () => {
     expect(css).toMatch(/--dsl-g-surface: var\(--dsw-alias-bg-layer-2,/)
     expect(css).toMatch(/--dsl-g-border-surface: color-mix\(in srgb, var\(--dsw-alias-label-primary\) 12%/)
     for (const rule of ['card', 'stat', 'callout', 'hero', 'accordion']) {
-      const block = new RegExp(`\\.${rule} \\{([^}]*)\\}`).exec(css)
+      const block = new RegExp(`^\\s*\\.${rule} \\{([^}]*)\\}`, 'm').exec(css)
       expect(block, `.${rule} must exist`).not.toBeNull()
       // Outline + surface tint are DERIVED from the theme's label colour: the
       // light theme maps every layer to white, so host layer/border tokens
