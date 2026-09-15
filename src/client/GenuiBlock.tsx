@@ -69,14 +69,14 @@ function specEquivalent(a: GenuiSpec, b: GenuiSpec): boolean {
 
 /** Stateful implementation. Streaming state adopts its first durable key
  * when the reply settles; switching an existing durable key starts fresh. */
-function GenuiBlockInstance({ spec, stateKey, animateEntrance = true }: GenuiBlockProps) {
+function GenuiBlockInstance({ spec, stateKey, animateEntrance = true, initialState, onStateChange }: GenuiBlockProps) {
   const gap = spec.gap ?? 16
   const onAction = useDebouncedAction(useGenuiAction())
   // Grouped radios and grouped checkboxes record their local selections here;
   // `submit` either grades radio-only papers locally or aggregates all form
   // state into one action. Block-local state survives streaming/panel
   // re-renders, and with a stateKey it also survives refresh/reopen.
-  const [persisted] = useState(() => (stateKey === undefined ? null : loadBlockState(stateKey)))
+  const [persisted] = useState(() => initialState ?? (onStateChange !== undefined || stateKey === undefined ? null : loadBlockState(stateKey)))
   const [answers, setAnswers] = useState<Record<string, string>>(persisted?.answers ?? {})
   const [multiAnswers, setMultiAnswers] = useState<Record<string, string[]>>(persisted?.multiAnswers ?? {})
   const [fields, setFields] = useState<Record<string, string>>(persisted?.fields ?? {})
@@ -151,20 +151,23 @@ function GenuiBlockInstance({ spec, stateKey, animateEntrance = true }: GenuiBlo
   // Durable save (debounced 300ms — typing in a field fires per keystroke).
   // Secret field values are stripped before writing: passwords never persist.
   useEffect(() => {
+    const safeFields = Object.fromEntries(
+      Object.entries(fields).filter(([id]) => !secretFields.has(id)),
+    )
+    const state = {
+      answers,
+      ...(Object.keys(multiAnswers).length > 0 ? { multiAnswers } : {}),
+      locked,
+      ...(Object.keys(safeFields).length > 0 ? { fields: safeFields } : {}),
+    }
+    if (onStateChange !== undefined) {
+      onStateChange(state)
+      return
+    }
     if (stateKey === undefined) return
-    const timer = setTimeout(() => {
-      const safeFields = Object.fromEntries(
-        Object.entries(fields).filter(([id]) => !secretFields.has(id)),
-      )
-      saveBlockState(stateKey, {
-        answers,
-        ...(Object.keys(multiAnswers).length > 0 ? { multiAnswers } : {}),
-        locked,
-        ...(Object.keys(safeFields).length > 0 ? { fields: safeFields } : {}),
-      })
-    }, 300)
+    const timer = setTimeout(() => saveBlockState(stateKey, state), 300)
     return () => clearTimeout(timer)
-  }, [stateKey, answers, multiAnswers, locked, fields, secretFields])
+  }, [stateKey, answers, multiAnswers, locked, fields, secretFields, onStateChange])
   // Achievement telemetry (0.9.5): the store dedupes by spec fingerprint, so
   // streaming re-renders and replays count once per distinct content.
   useEffect(() => {
@@ -215,4 +218,5 @@ export const GenuiBlock = memo(function GenuiBlock(props: GenuiBlockProps) {
   }
   return <GenuiBlockInstance key={identity.generation} {...props} />
 }, (prev, next) => prev.stateKey === next.stateKey
-  && prev.animateEntrance === next.animateEntrance && specEquivalent(prev.spec, next.spec))
+  && prev.animateEntrance === next.animateEntrance && prev.onStateChange === next.onStateChange
+  && specEquivalent(prev.spec, next.spec))

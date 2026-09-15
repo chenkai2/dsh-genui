@@ -23,6 +23,12 @@ const PLUGIN_ID = '@changfenhuang/dsh-genui'
 
 /** Assets directory served by the node-half route. */
 const ASSET_DIR = `/plugins/${PLUGIN_ID}/assets`
+let embeddedAssetBase: string | undefined
+
+/** Set once before rendering when the host bundles engines locally. */
+export function setGenuiAssetBase(baseURL: string): void {
+  embeddedAssetBase = new URL(baseURL, document.baseURI).href.replace(/\/?$/, '/')
+}
 
 /** Boot graph shape read from `window.__DSH_BOOT__` (subset, defensive). */
 interface BootGraphLike {
@@ -37,6 +43,7 @@ interface AssetGlobal {
 /** Resolve an asset URL, appending the bundle rev for cache busting when the
  * boot graph exposes it. */
 export function assetUrl(file: string): string {
+  if (embeddedAssetBase !== undefined) return new URL(file, embeddedAssetBase).href
   const graph = (window as unknown as { __DSH_BOOT__?: BootGraphLike }).__DSH_BOOT__
   const rev = graph?.entries?.find(entry => entry.id === PLUGIN_ID)?.rev
   return `${ASSET_DIR}/${file}${rev === undefined ? '' : `?rev=${rev}`}`
