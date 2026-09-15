@@ -20,7 +20,10 @@
     },
     "./package.json": "./package.json",
     "./embed": "./src/client/embed.ts",
-    "./assets/*": "./src/client/asset-*.ts",
+    "./assets/mermaid": "./src/client/asset-mermaid.ts",
+    "./assets/three": "./src/client/asset-three.ts",
+    "./assets/echarts-core": "./src/client/asset-echarts-core.ts",
+    "./assets/echarts": "./src/client/asset-echarts.ts",
     "./skill": "./SKILL.md"
   },
   "files": [
