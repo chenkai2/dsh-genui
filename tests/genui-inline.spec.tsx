@@ -44,6 +44,27 @@ describe('inline markup', () => {
     expect(out).toContain('&lt;img')
   })
 
+  it('renders inline and display math while preserving code and unsafe-source boundaries', () => {
+    const { container } = render(<div>{renderInline('Energy $E=mc^2$; $$\\frac{a}{b}$$; `$x$`; <img src=x onerror=alert(1)>')}</div>)
+    expect(container.querySelectorAll('.katex')).toHaveLength(2)
+    expect(container.querySelector('.katex-display')).not.toBeNull()
+    expect(container.querySelector('code')?.textContent).toBe('$x$')
+    expect(container.querySelector('img')).toBeNull()
+    expect(container.querySelector('.katex-error')).toBeNull()
+  })
+
+  it('keeps escaped delimiters literal and refuses unsafe math links', () => {
+    expect(html(String.raw`Escaped \$x\$`)).not.toContain('katex')
+    const out = html(String.raw`$\href{javascript:alert(1)}{x}$`)
+    expect(out).not.toContain('href="javascript:')
+    expect(out).not.toContain('<script')
+  })
+
+  it('leaves currency and incomplete math literal', () => {
+    expect(html('Price $5 and $10')).not.toContain('katex')
+    expect(html('Unfinished $x + 1')).toContain('$x + 1')
+  })
+
   it('returns the plain string untouched when there is no markup', () => {
     // Identity: the fast path must not wrap plain prose in extra elements.
     const plain = '完全没有标记的一句话'

@@ -413,7 +413,7 @@ export function renderNode(
             <div key={i} className={css.li}>
               {isListItemNode(item)
                 ? renderNode(item, i, onAction, depth + 1, answers)
-                : <><span className={css.liTitle}>{renderInline(typeof item === 'string' ? item : item.title)}</span>{typeof item !== 'string' && item.desc !== undefined && <span className={css.liDesc}>{renderInline(item.desc)}</span>}</>}
+                : <><div className={css.liTitle}>{renderInline(typeof item === 'string' ? item : item.title)}</div>{typeof item !== 'string' && item.desc !== undefined && <div className={css.liDesc}>{renderInline(item.desc)}</div>}</>}
             </div>
           ))}
           {bound !== undefined && <span className={css.filterHint}>匹配 {items.length} / {all.length} 项</span>}

@@ -159,7 +159,7 @@ function infostringOf(block: Element): string | null {
   const pre = block.querySelector('pre')
   for (const el of block.querySelectorAll('*')) {
     if (el.childElementCount !== 0) continue
-    if (el.textContent !== 'dsh-ui') continue
+    if (el.textContent?.trim() !== 'dsh-ui') continue
     if (pre !== null && pre.contains(el)) continue
     // A leaf label that belongs to a NESTED known code surface is that
     // surface's banner, not `block`'s own banner. Only accept labels whose
@@ -181,7 +181,7 @@ function labelTextOf(block: Element): string {
   for (const el of block.querySelectorAll('*')) {
     if (el.childElementCount !== 0) continue
     if (pre !== null && pre.contains(el)) continue
-    return el.textContent ?? ''
+    return el.textContent?.trim() ?? ''
   }
   return ''
 }
@@ -247,7 +247,10 @@ function findFenceCandidates(scope: ParentNode = document): HTMLElement[] {
     if (seen.has(el)) continue
     // Message-level containers that happen to carry a surface class must
     // not be taken over: hiding them hides the whole answer (issue #19).
-    if (!isPlausibleFenceSurface(el)) continue
+    if (!isPlausibleFenceSurface(el)) {
+      if (infostringOf(el) === 'dsh-ui') warnImplausibleSurface(el)
+      continue
+    }
     out.push(el)
     seen.add(el)
   }
@@ -263,10 +266,8 @@ function findFenceCandidates(scope: ParentNode = document): HTMLElement[] {
     if (surface === null) {
       // Diagnose the issue #19 guard: a labeled ancestor that is NOT a code
       // surface (prose/multiple code bodies) was skipped on purpose.
-      if (implausibleLabeledAncestorOf(pre, scope) !== null && !plausibilityWarned) {
-        plausibilityWarned = true
-        console.warn('[dsh-genui] 跳过带 dsh-ui 标签但疑似消息容器的节点（含段落或多个代码体）——防止 DOM 通道隐藏整条消息（issue #19）')
-      }
+      const rejected = implausibleLabeledAncestorOf(pre, scope)
+      if (rejected !== null) warnImplausibleSurface(rejected)
       continue
     }
     if (seen.has(surface)) continue
@@ -286,8 +287,16 @@ function findFenceCandidates(scope: ParentNode = document): HTMLElement[] {
 /** One-time-per-install drift diagnostic flag (reset per install, so tests
  * and hot re-installs each get a fresh warning budget). */
 let driftWarned = false
-/** One-time-per-install issue #19 guard diagnostic (same budget). */
-let plausibilityWarned = false
+/** A rejected surface gets one diagnostic; never log its conversation text. */
+let plausibilityWarned = new WeakSet<Element>()
+function warnImplausibleSurface(surface: Element): void {
+  if (plausibilityWarned.has(surface)) return
+  plausibilityWarned.add(surface)
+  const pres = surface.querySelectorAll('pre')
+  const tags = [...surface.querySelectorAll(BLOCK_CONTENT_SELECTOR)]
+    .filter(el => !el.closest('pre')).map(el => el.tagName.toLowerCase())
+  console.warn(`[dsh-genui] 跳过带 dsh-ui 标签但疑似消息容器的节点：pre=${pres.length}, outside-code=${[...new Set(tags)].join(',') || 'none'}；保留原文，防止隐藏整条消息（issue #19）`)
+}
 
 /** Root factory seam (tests / tuning): the DOM channel creates one React root
  * per taken-over fence through this indirection so mount-failure cleanup is
@@ -384,7 +393,7 @@ export function installDomFenceRenderer(
 ): () => void {
   if (typeof document === 'undefined') return () => {}
   driftWarned = false
-  plausibilityWarned = false
+  plausibilityWarned = new WeakSet<Element>()
   const mounts = new Map<HTMLElement, Mount>()
   let disposed = false
   let rafId: number | null = null

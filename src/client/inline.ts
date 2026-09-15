@@ -11,14 +11,16 @@
  *   ==mark==          highlight
  *   [text](https://…) inline link (http/https/mailto only)
  *
- * Safety: this NEVER produces HTML. Each token becomes a React element, so the
- * host's HTML parser is never involved (the whole client builds elements, the
- * only innerHTML in the project is mermaid's sanitized SVG). An unterminated or
+ * Math uses $inline$ / $$display$$ through the host MarkdownText renderer.
+ * Safety: plain text stays escaped; math uses the host's untrusted TeX pipeline.
+ * An unterminated or
  * unknown marker is rendered literally rather than erroring, and a link whose
  * href fails {@link safeHref} degrades to its label text.
  * @module @changfenhuang/dsh-genui/client/inline
  */
 import { createElement, type ReactNode } from 'react'
+import { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
+import { CODE_BLOCK_LABELS } from './primitive-labels.ts'
 import css from './GenuiBlock.module.css'
 import { safeHref } from './genui-runtime/value-utils.ts'
 
@@ -26,11 +28,13 @@ import { safeHref } from './genui-runtime/value-utils.ts'
 // Links match ANY target here and are validated by safeHref afterwards, so a
 // `javascript:` target degrades to its label text instead of showing as raw
 // markup the reader has to parse themselves.
-const INLINE = /`[^`\n]+`|\*\*[^*\n]+\*\*|==[^=\n]+==|\[[^\]\n]+\]\([^)\s]+\)/g
+const MATH_LABELS = { code: CODE_BLOCK_LABELS, footnotes: 'Footnotes' }
+
+const INLINE = /`[^`\n]+`|\*\*[^*\n]+\*\*|==[^=\n]+==|\[[^\]\n]+\]\([^)\s]+\)|(?<![\\$])\$\$[\s\S]+?\$\$|(?<![\\$])\$(?!\s|\$)(?:\\.|[^$\\\n])+(?<!\s)\$(?!\d|\$)/g
 
 /** True when the string contains anything the parser understands. */
 export function hasInlineMarkup(text: string): boolean {
-  return typeof text === 'string' && /[`*=]|\[/.test(text)
+  return typeof text === 'string' && /[`*=$]|\[/.test(text)
 }
 
 /**
@@ -49,6 +53,12 @@ export function renderInline(text: string): ReactNode {
     if (index > last) out.push(text.slice(last, index))
     if (token.startsWith('`')) {
       out.push(createElement('code', { key: key++, className: css.inlineCode }, token.slice(1, -1)))
+    } else if (token.startsWith('$')) {
+      // Reuse the host's public, untrusted-math renderer and its KaTeX assets.
+      // Pass only the math token: surrounding text keeps the existing markup contract.
+      const math = token.startsWith('$$') ? `$$\n${token.slice(2, -2)}\n$$` : token
+      out.push(createElement('div', { key: key++, className: css.inlineMath },
+        createElement(MarkdownText, { text: math, labels: MATH_LABELS })))
     } else if (token.startsWith('**')) {
       out.push(createElement('strong', { key: key++, className: css.inlineStrong }, token.slice(2, -2)))
     } else if (token.startsWith('==')) {
