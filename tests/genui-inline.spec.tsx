@@ -28,6 +28,12 @@ describe('inline markup', () => {
     expect(out).not.toContain('<div class=')
   })
 
+  it('keeps a multiline display formula inside emphasis', () => {
+    const { container } = render(<span>{renderInline('**$$x +\ny$$**')}</span>)
+    expect(container.querySelector('strong .katex-display')).not.toBeNull()
+    expect(container.textContent).not.toContain('**')
+  })
+
   it('updates a formula without leaving stale math or damaging surrounding text', () => {
     const { container, rerender } = render(<span>{renderInline(String.raw`**\(x\)** tail`)}</span>)
     expect(container.querySelector('strong .katex')).not.toBeNull()

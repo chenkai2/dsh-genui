@@ -20,7 +20,7 @@ function InlineMath({ source, display }: { source: string; display: boolean }) {
 
 // Code is literal. TeX tokens are opaque to emphasis/link parsing; the other
 // rich-text tokens recurse so **$x$** and ==\\(x\\)== work without nested DOM roots.
-const INLINE = /`[^`\n]+`|\\\\|\\\$|(?<![\\$])\$\$(?:\\.|[^\\])*?\$\$|\\\[(?:\\(?!\])[^]|[^\\])*?\\\]|\\\((?:\\(?!\))[^]|[^\\])*?\\\)|(?<![\\$])\$(?!\s|\$)(?:\\.|[^$\\\n])+(?<!\s)\$(?!\d|\$)|\*\*[^\n]+?\*\*|==[^\n]+?==|\[[^\]\n]+\]\([^)\s]+\)/g
+const INLINE = /`[^`\n]+`|\\\\|\\\$|(?<![\\$])\$\$(?:\\.|[^\\])*?\$\$|\\\[(?:\\(?!\])[^]|[^\\])*?\\\]|\\\((?:\\(?!\))[^]|[^\\])*?\\\)|(?<![\\$])\$(?!\s|\$)(?:\\.|[^$\\\n])+(?<!\s)\$(?!\d|\$)|\*\*[\s\S]+?\*\*|==[\s\S]+?==|\[[^\]\n]+\]\([^)\s]+\)/g
 
 export function hasInlineMarkup(text: string): boolean {
   return typeof text === 'string' && /[`*=$\\]|\[/.test(text)
