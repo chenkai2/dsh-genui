@@ -72,6 +72,9 @@ function specEquivalent(a: GenuiSpec, b: GenuiSpec): boolean {
 function GenuiBlockInstance({ spec, stateKey, animateEntrance = true, initialState, onStateChange }: GenuiBlockProps) {
   const gap = spec.gap ?? 16
   const onAction = useDebouncedAction(useGenuiAction())
+  const stateChangeRef = useRef(onStateChange)
+  stateChangeRef.current = onStateChange
+  const savesExternally = onStateChange !== undefined
   // Grouped radios and grouped checkboxes record their local selections here;
   // `submit` either grades radio-only papers locally or aggregates all form
   // state into one action. Block-local state survives streaming/panel
@@ -160,14 +163,14 @@ function GenuiBlockInstance({ spec, stateKey, animateEntrance = true, initialSta
       locked,
       ...(Object.keys(safeFields).length > 0 ? { fields: safeFields } : {}),
     }
-    if (onStateChange !== undefined) {
-      onStateChange(state)
+    if (savesExternally) {
+      stateChangeRef.current?.(state)
       return
     }
     if (stateKey === undefined) return
     const timer = setTimeout(() => saveBlockState(stateKey, state), 300)
     return () => clearTimeout(timer)
-  }, [stateKey, answers, multiAnswers, locked, fields, secretFields, onStateChange])
+  }, [stateKey, answers, multiAnswers, locked, fields, secretFields, savesExternally])
   // Achievement telemetry (0.9.5): the store dedupes by spec fingerprint, so
   // streaming re-renders and replays count once per distinct content.
   useEffect(() => {
