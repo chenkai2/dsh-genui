@@ -215,7 +215,10 @@ describe('validate_dsh_ui tool', () => {
     const value = String(await vtool.execute({ spec: dropping }))
     expect(value).toContain('❌')
     expect(value).toContain('声明了 2 个组件')
-    expect(value).toContain('仅成功解析出 1 个')
+    expect(value).toContain('仅解析出 1 个')
+    // #163 follow-up: the dropped node is named with its position and type
+    // instead of only the aggregate count.
+    expect(value).toContain('- items[0]（table）')
   })
 
   it.each([
@@ -270,8 +273,26 @@ describe('validate_dsh_ui tool', () => {
       items: [{ type: 'image', src: 'javascript:blocked' }, { type: 'custom-widget' }],
     } }))
     expect(value).toContain('声明了 1 个组件')
-    expect(value).toContain('仅成功解析出 0 个')
-    expect(value).toContain('有 1 个组件')
+    expect(value).toContain('仅解析出 0 个')
+    expect(value).toContain('被丢弃')
+  })
+
+  it('names each dropped node, its type, what it wrote, and what is missing', async () => {
+    // A healthy sibling must NOT be reported as dropped, and the dropped node
+    // must be named with the field it actually wrote — the aggregate count
+    // alone left the model guessing which component was broken.
+    const value = String(await vtool.execute({ spec: {
+      items: [{ type: 'callout', title: '只有标题' }, { type: 'text', content: '好' }],
+    } }))
+    expect(value).toContain('被丢弃的节点：')
+    expect(value).toContain('- items[0]（callout）缺少必填字段 `content`；已写字段 title')
+    expect(value).not.toContain('items[1]（text）')
+
+    // A node nested in a container keeps its full path.
+    const nested = String(await vtool.execute({ spec: {
+      items: [{ type: 'grid', cols: 2, items: [{ type: 'table', rows: 42 }] }],
+    } }))
+    expect(nested).toContain('- items[0].items[0]（table）缺少必填字段 `columns`')
   })
 
   it('reports the chart kind contract and field-level data errors', async () => {
