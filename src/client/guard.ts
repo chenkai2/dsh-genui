@@ -1200,7 +1200,7 @@ function sanitizeEChartOption(v: unknown, depth: number, budget: EChartSanitizeB
       const s = sanitizeEChartOption(v[i], depth + 1, budget)
       if (s !== undefined) arr.push(s)
     }
-    return arr.length > 0 ? arr : undefined
+    return arr.length > 0 || v.length === 0 ? arr : undefined
   }
   const o = obj(v)
   if (o === undefined) return undefined
@@ -1216,7 +1216,9 @@ function sanitizeEChartOption(v: unknown, depth: number, budget: EChartSanitizeB
     }
     out[key] = s
   }
-  return Object.keys(out).length > 0 ? out : undefined
+  // Empty axes/tooltip enable ECharts defaults; an empty data array clears it.
+  // Keep intentional empties, while still dropping objects stripped by guards.
+  return Object.keys(out).length > 0 || Object.keys(o).length === 0 ? out : undefined
 }
 
 /**

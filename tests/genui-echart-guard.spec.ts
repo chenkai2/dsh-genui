@@ -66,6 +66,16 @@ describe('repairGenuiSpec: echart node rejection', () => {
 })
 
 describe('sanitizeEChartOption: XSS prevention (via repairGenuiSpec)', () => {
+  it('keeps explicit empty axes, tooltip and data while stripping unsafe values', () => {
+    const spec = repairGenuiSpec({ items: [echart({ option: {
+      yAxis: {}, tooltip: {}, series: [{ type: 'bar', data: [] }],
+      title: { text: '<script>alert(1)</script>' },
+    } })] })
+    expect((spec?.items[0] as { option: unknown }).option).toEqual({
+      yAxis: {}, tooltip: { renderMode: 'richText' }, series: [{ type: 'bar', data: [] }],
+    })
+  })
+
   it('forces tooltip.renderMode to richText', () => {
     const spec = repairGenuiSpec({ items: [echart({
       option: { tooltip: { trigger: 'axis', formatter: '{b}: {c}' } },
