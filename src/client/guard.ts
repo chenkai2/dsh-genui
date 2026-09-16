@@ -19,7 +19,7 @@
  *   are elided.
  */
 import type { GenuiFileTreeNode, GenuiList, GenuiNode, GenuiPlot, GenuiPlotSeries, GenuiScene3D, GenuiSpec, GenuiDiagram, GenuiDiagramTheme, GenuiDiagramKind } from './spec.ts'
-import { wrapSingleComponentRoot } from './spec.ts'
+import { isComponentRoot, wrapSingleComponentRoot } from './spec.ts'
 import {
   BADGE_TONES, BUTTON_TONES, CALLOUT_TONES, CARD_TONES, CHART_KINDS, COMPONENT_SCHEMAS, HERO_TONES,
   DIAGRAM_EDGE_KINDS, DIAGRAM_KINDS, DIAGRAM_NODE_TYPES, DIAGRAM_ROUTES, DIAGRAM_VARIANTS,
@@ -1292,11 +1292,15 @@ function sanitizeEChartOption(v: unknown, depth: number, budget: EChartSanitizeB
 function repairCanonicalGenuiSpec(value: unknown): GenuiSpec | null {
   const v = obj(value)
   if (v === undefined) return null
-  if (!Array.isArray(v.items)) {
+  // A bare component root (including data components whose `items` is their
+  // record list — steps/list/timeline/…) wraps first; the wrapper is a plain
+  // spec, so this recursion cannot wrap twice (issue #172).
+  if (isComponentRoot(value)) {
     const wrapped = wrapSingleComponentRoot(value)
     if (wrapped === null) return null
     return repairCanonicalGenuiSpec(wrapped)
   }
+  if (!Array.isArray(v.items)) return null
   const ctx: RepairCtx = { remaining: GENUI_LIMITS.maxNodes }
   return {
     ...opt('title', str(v.title, GENUI_LIMITS.maxString)),
@@ -1434,8 +1438,9 @@ function visitDeclaredGenuiNodes(
   }
   const root = obj(value)
   if (root === undefined) return count
-  // Single-component root (no items array): the root itself is the declared node.
-  if (!Array.isArray(root.items) && declared(value)) walkNode(value, 'spec')
+  // Component root: the root itself is the declared node, whether or not it
+  // carries an `items` data array (issue #172).
+  if (isComponentRoot(root) && declared(value)) walkNode(value, 'spec')
   else walk(root.items, 'items')
   return count
 }
@@ -1480,13 +1485,14 @@ function validateCanonicalGenuiSpec(value: unknown): GenuiValidation {
   const errors: string[] = []
   const v = obj(value)
   if (v === undefined) return { ok: false, errors: ['spec root must be an object'] }
-  if (!Array.isArray(v.items)) {
-    // Single-component root: validate through the wrapped form so the tool
-    // agrees with the renderer about what is a valid fence body.
+  // Single-component root: validate through the wrapped form so the tool
+  // agrees with the renderer about what is a valid fence body.
+  if (isComponentRoot(value)) {
     const wrapped = wrapSingleComponentRoot(value)
     if (wrapped !== null) return validateCanonicalGenuiSpec(wrapped)
     return { ok: false, errors: ['spec.items must be an array'] }
   }
+  if (!Array.isArray(v.items)) return { ok: false, errors: ['spec.items must be an array'] }
   validateSchemaFieldKinds(v, 'spec', GENUI_SPEC_SCHEMA, errors, ['items'])
   let count = 0
   let capped = false

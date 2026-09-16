@@ -19,6 +19,7 @@ import { readFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRenderUiTool, createValidateDshUiTool } from './tool.ts'
+import { installFenceFeedback } from './fence-feedback.ts'
 
 /* ---------------- lazy engine asset route ---------------- */
 
@@ -175,12 +176,27 @@ function bundledSkillProvider(): SkillProvider {
   }
 }
 
-export function apply(ctx: Context): void {
+/**
+ * Plugin config as the host passes it (unvalidated: the node half deliberately
+ * imports no schema library, so a profile can set these keys directly).
+ */
+export interface GenuiPluginConfig {
+  /**
+   * Steer ONE correction into a turn whose dsh-ui fence did not render, so the
+   * model can resend a fixed fence (issue #160). Off by default: the loop is
+   * bounded (one per turn, one per fence, never for subagents) but it spends
+   * model steps, which is the operator's call.
+   */
+  fenceFeedback?: boolean
+}
+
+export function apply(ctx: Context, config?: GenuiPluginConfig): void {
   ctx.systemPrompt.section({
     name: 'genui:fence',
     order: ctx.systemPrompt.getSectionOrder('STRUCTURED_OUTPUT'),
     text: GENUI_SECTION_TEXT,
   })
+  installFenceFeedback(ctx, config?.fenceFeedback === true)
   // Hosts without tool access keep the fence channel. The dependency fiber
   // starts whenever tools becomes available and unloads its registrations
   // before either the service or this plugin is replaced.

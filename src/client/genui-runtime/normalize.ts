@@ -1,5 +1,6 @@
 /** Deterministic GenUI alias and structural normalization. */
 import { COMPONENT_SCHEMAS } from './schema.ts'
+import { isComponentRoot } from '../spec.ts'
 import type { GenuiDiagnostic } from './diagnostics.ts'
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -11,6 +12,40 @@ function record(value: unknown): Record<string, unknown> | undefined {
 function isNode(value: unknown): value is Record<string, unknown> {
   const candidate = record(value)
   return candidate !== undefined && typeof candidate.type === 'string'
+}
+
+/** Fields a `stat` keeps when a metric record is folded into its own node. */
+const STAT_METRIC_FIELDS = ['label', 'value', 'delta', 'spark', 'size'] as const
+
+/**
+ * Normalize one metric record of a stat group into a single-metric `stat`
+ * node, or null when the entry is not a metric at all.
+ */
+function statMetricsOf(
+  entries: readonly unknown[],
+  path: string,
+  normalizeChild: (child: unknown, childPath: string) => unknown,
+): unknown[] | null {
+  if (entries.length === 0) return null
+  const metrics: unknown[] = []
+  for (let index = 0; index < entries.length; index++) {
+    const entry = entries[index]
+    const metric = record(entry)
+    if (metric === undefined) return null
+    // An entry that is already a node passes through: the model enumerated
+    // its own components instead of bare metrics.
+    if (isNode(entry)) {
+      metrics.push(normalizeChild(entry, `${path}.items[${index}]`))
+      continue
+    }
+    if (typeof metric.label !== 'string' && typeof metric.value !== 'string') return null
+    const stat: Record<string, unknown> = { type: 'stat' }
+    for (const field of STAT_METRIC_FIELDS) {
+      if (metric[field] !== undefined) stat[field] = metric[field]
+    }
+    metrics.push(stat)
+  }
+  return metrics
 }
 
 function normalizeAliasFields(value: Record<string, unknown>, path: string, type: string, warnings: GenuiDiagnostic[]): Record<string, unknown> {
@@ -48,6 +83,27 @@ function normalizeNode(value: unknown, path: string, warnings: GenuiDiagnostic[]
   const normalizeNodeArray = (children: unknown, childPath: string): unknown => Array.isArray(children)
     ? children.map((child, index) => normalizeNodeValue(child, `${childPath}[${index}]`))
     : children
+
+  if (type === 'stat' && Array.isArray(out.items) && out.label === undefined && out.value === undefined) {
+    // Model-side generalization: one `stat` carrying a metric list
+    // ({type:'stat',items:[{label,value},…]}) means "these metrics, side by
+    // side". Normalize it into a row of single-metric stats, the documented
+    // multi-stat idiom (SKILL.md), instead of letting repair drop the node and
+    // reject the whole fence (issue #172, case A). A group that also declares
+    // `label`/`value` is a single stat with stray fields and stays untouched.
+    const metrics = statMetricsOf(out.items, path, normalizeNodeValue)
+    if (metrics !== null) {
+      warnings.push({
+        kind: 'alias',
+        path: `${path}.items`,
+        message: `${path}.items normalized into a row of 'stat' nodes`,
+        type,
+        field: 'items',
+        canonical: 'row',
+      })
+      return { type: 'row', items: metrics, ...(out.span !== undefined ? { span: out.span } : {}) }
+    }
+  }
 
   if (type === 'row' || type === 'col' || type === 'grid' || type === 'card' || type === 'file-tree' || type === 'timeline' || type === 'breadcrumb') {
     if (type !== 'file-tree' && type !== 'timeline' && type !== 'breadcrumb') out.items = normalizeNodeArray(out.items, `${path}.items`)
@@ -133,10 +189,14 @@ export function normalizeGenuiSpec(value: unknown): { value: unknown; warnings: 
   const root = record(value)
   if (root === undefined) return { value, warnings }
   const out = { ...root }
+  // A bare component root is normalized as a node, not as an envelope whose
+  // `items` are its children: for a data component (steps/list/timeline/…)
+  // `items` is the record list and its aliases must still apply (issue #172).
+  if (isComponentRoot(out)) {
+    return { value: normalizeNode(out, 'spec', warnings), warnings }
+  }
   if (Array.isArray(out.items)) {
     out.items = out.items.map((item, index) => normalizeNode(item, `items[${index}]`, warnings))
-  } else if (typeof out.type === 'string') {
-    return { value: normalizeNode(out, 'spec', warnings), warnings }
   }
   return { value: out, warnings }
 }
