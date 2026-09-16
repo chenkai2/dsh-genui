@@ -370,6 +370,111 @@ describe('installDomFenceRenderer', () => {
     }
   })
 
+  it('shows a visible diagnostic for a settled unrepairable body (issue #158)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const row = assistantRow('s10-diag')
+    const block = stockCodeBlock(BROKEN_SPEC, 'dsh-ui')
+    row.appendChild(block)
+    document.body.appendChild(row)
+    const send = vi.fn()
+    const dispose = installDomFenceRenderer(makeCtx('sess-diag', send), send)
+    try {
+      await tick()
+      const alert = row.querySelector('.genui-dom-fence-diagnostic [role="alert"]')
+      expect(alert).not.toBeNull()
+      expect(alert!.textContent).toContain('dsh-ui')
+      // The raw body stays visible: the diagnostic explains, it never replaces.
+      expect(block.style.display).toBe('')
+      expect(block.textContent).toContain('content')
+      // The strip is mounted BEFORE the code block, and repeated sweeps do not
+      // duplicate it.
+      expect(row.querySelector('.genui-dom-fence-diagnostic')!.nextElementSibling).toBe(block)
+      await tick(60)
+      expect(row.querySelectorAll('.genui-dom-fence-diagnostic')).toHaveLength(1)
+    } finally {
+      dispose()
+    }
+  })
+
+  it('keeps the diagnostic off a streaming body (partial JSON is not an error)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const row = assistantRow('s10-stream', true)
+    const block = stockCodeBlock(BROKEN_SPEC, 'dsh-ui')
+    row.appendChild(block)
+    document.body.appendChild(row)
+    const send = vi.fn()
+    const dispose = installDomFenceRenderer(makeCtx('sess-stream', send), send)
+    try {
+      await tick()
+      expect(row.querySelector('.genui-dom-fence-diagnostic')).toBeNull()
+    } finally {
+      dispose()
+    }
+  })
+
+  it('clears the diagnostic once the body becomes renderable', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const row = assistantRow('s10-fixed')
+    const block = stockCodeBlock(BROKEN_SPEC, 'dsh-ui')
+    row.appendChild(block)
+    document.body.appendChild(row)
+    const send = vi.fn()
+    const dispose = installDomFenceRenderer(makeCtx('sess-fixed', send), send)
+    try {
+      await tick()
+      expect(row.querySelector('.genui-dom-fence-diagnostic')).not.toBeNull()
+      // The host re-renders the settled message with a repaired body.
+      block.querySelector('code')!.textContent = VALID_SPEC
+      const mounted = await waitFor(() => row.querySelector('[data-genui]') !== null)
+      expect(mounted).toBe(true)
+      expect(row.querySelector('.genui-dom-fence-diagnostic')).toBeNull()
+      expect(block.style.display).toBe('none')
+    } finally {
+      dispose()
+    }
+  })
+
+  it('rebuilds the diagnostic when a host re-render wipes its container', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const row = assistantRow('s10-wiped')
+    const block = stockCodeBlock(BROKEN_SPEC, 'dsh-ui')
+    row.appendChild(block)
+    document.body.appendChild(row)
+    const send = vi.fn()
+    const dispose = installDomFenceRenderer(makeCtx('sess-wiped', send), send)
+    try {
+      await tick()
+      const container = row.querySelector('.genui-dom-fence-diagnostic')!
+      container.textContent = ''
+      // A mutation in the row drives the pre-paint repair pass.
+      row.setAttribute('data-probe', '1')
+      const restored = await waitFor(() => row.querySelector('.genui-dom-fence-diagnostic [role="alert"]') !== null)
+      expect(restored).toBe(true)
+      expect(row.querySelectorAll('.genui-dom-fence-diagnostic')).toHaveLength(1)
+    } finally {
+      dispose()
+    }
+  })
+
+  it('drops the diagnostic when the block becomes a non-dsh-ui fence', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const row = assistantRow('s10-relabelled')
+    const block = stockCodeBlock(BROKEN_SPEC, 'dsh-ui')
+    row.appendChild(block)
+    document.body.appendChild(row)
+    const send = vi.fn()
+    const dispose = installDomFenceRenderer(makeCtx('sess-relabelled', send), send)
+    try {
+      await tick()
+      expect(row.querySelector('.genui-dom-fence-diagnostic')).not.toBeNull()
+      block.querySelector('div > div')!.textContent = 'json'
+      const gone = await waitFor(() => row.querySelector('.genui-dom-fence-diagnostic') === null)
+      expect(gone).toBe(true)
+    } finally {
+      dispose()
+    }
+  })
+
   it('relays component actions through the injected sender', async () => {
     const row = assistantRow('s11')
     const block = stockCodeBlock(BUTTON_SPEC, 'dsh-ui')

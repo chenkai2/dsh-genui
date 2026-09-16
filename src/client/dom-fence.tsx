@@ -30,6 +30,10 @@
  *   mount re-renders with the stable source identity — the moment panels
  *   publish and durable state keys in (mirrors the registry channel's
  *   settled-source semantics; streaming renders are identity-less).
+ * - **Visible failure**: a settled block that stays a code block (malformed
+ *   JSON, guard rejection, chart contract) mounts {@link FenceDiagnostic}
+ *   above the stock block. Console-only reporting made the defect invisible to
+ *   the person who wrote the fence (issue #158); the raw body is preserved.
  * - Stable identity: the owning row's `data-chat-anchor-key` (session-stable,
  *   seq-derived) + the fence's ordinal among settled dsh-ui blocks in that
  *   row. `sourceId = dom:<anchor>:<ordinal>` feeds panel dedup and durable
@@ -51,7 +55,7 @@ import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { GenuiActionContext, type GenuiActionHandler } from './action-context.ts'
 import css from './GenuiBlock.module.css'
-import { renderResolvedFenceNode, type GenuiFenceContext } from './fence-render.tsx'
+import { describeFenceFailure, FenceDiagnostic, renderResolvedFenceNode, type GenuiFenceContext } from './fence-render.tsx'
 
 /** Fence surfaces the channel can take over, newest host first: the shared
  * CodeBlock surface every rc.6+ markdown fence renders through
@@ -66,6 +70,8 @@ const PROCESSED = 'data-genui-rendered'
 const STREAMING = '[data-streaming]'
 /** Container class for the plugin-owned root. */
 const CONTAINER_CLASS = 'genui-dom-fence'
+/** Container class for the visible diagnostic of an unrenderable fence. */
+const DIAGNOSTIC_CLASS = 'genui-dom-fence-diagnostic'
 /** Slow sweep interval: the observer catches everything, this is the 1s
  * belt-and-braces pass (history loads, missed attribute batches). */
 const SWEEP_MS = 1000
@@ -395,6 +401,10 @@ export function installDomFenceRenderer(
   driftWarned = false
   plausibilityWarned = new WeakSet<Element>()
   const mounts = new Map<HTMLElement, Mount>()
+  // Blocks we could not render: the stock code block stays visible AND a
+  // visible diagnostic explains why (issue #158). Kept apart from `mounts`
+  // because a diagnosed block is never hidden.
+  const diagnostics = new Map<HTMLElement, { container: HTMLElement; root: Root; raw: string }>()
   let disposed = false
   let rafId: number | null = null
 
@@ -436,6 +446,77 @@ export function installDomFenceRenderer(
     mount.container.remove()
     block.style.display = ''
     block.removeAttribute(PROCESSED)
+    clearDiagnostic(block)
+  }
+
+  /** Drop the diagnostic mounted for one block (renderable again, or gone). */
+  function clearDiagnostic(block: HTMLElement): void {
+    const diagnostic = diagnostics.get(block)
+    if (diagnostic === undefined) return
+    diagnostics.delete(block)
+    try {
+      diagnostic.root.unmount()
+    } catch {
+      // The host's re-render already invalidated the tree; removing the
+      // container below is the recovery.
+    }
+    diagnostic.container.remove()
+  }
+
+  /**
+   * Mount (or refresh) the visible diagnostic that explains why a settled
+   * dsh-ui fence stays a code block. Idempotent per block: the 1s sweep and
+   * every mutation pass re-enter here, and the strip must neither duplicate
+   * nor vanish when the host re-renders its message (issues #158/#172).
+   *
+   * This only ever creates/updates the strip and re-attaches it; it never
+   * re-renders on an empty container, because React commits asynchronously —
+   * a synchronous "it looks wiped" rebuild inside the mutation callback would
+   * re-trigger the observer forever (the sweep owns that recovery).
+   */
+  function renderDiagnostic(block: HTMLElement, raw: string): void {
+    // Nothing to report (renderable, empty, or still streaming): never leave
+    // an empty strip behind, and drop one that is no longer true.
+    if (describeFenceFailure(raw) === null) {
+      clearDiagnostic(block)
+      return
+    }
+    const existing = diagnostics.get(block)
+    if (existing !== undefined) {
+      // A host re-render can detach our container without removing the block:
+      // re-attach before paint; a changed body rebuilds the strip.
+      if (existing.container.parentElement !== block.parentElement || existing.container.nextElementSibling !== block) {
+        block.before(existing.container)
+      }
+      if (existing.raw === raw) return
+      clearDiagnostic(block)
+    }
+    const container = document.createElement('div')
+    container.className = DIAGNOSTIC_CLASS
+    block.before(container)
+    let root: Root
+    try {
+      root = domRootFactory(container)
+      root.render(<FenceDiagnostic raw={raw} />)
+    } catch (error) {
+      container.remove()
+      warnOnce(block, `failed to mount the dsh-ui diagnostic (${error instanceof Error ? error.message : String(error)}); keeping the stock code block visible`)
+      return
+    }
+    diagnostics.set(block, { container, root, raw })
+  }
+
+  /**
+   * Sweep-only recovery for a diagnostic whose DOM the host threw away
+   * without removing the block (a re-render can empty our container). Runs on
+   * the rAF-scheduled sweep, never inside the mutation callback, so a commit
+   * that lands a frame later cannot re-trigger it in a loop.
+   */
+  function rebuildWipedDiagnostic(block: HTMLElement, raw: string): void {
+    const existing = diagnostics.get(block)
+    if (existing === undefined || existing.container.childElementCount > 0) return
+    clearDiagnostic(block)
+    renderDiagnostic(block, raw)
   }
 
   /** One-time-per-block diagnostics: silent returns must be diagnosable
@@ -465,20 +546,24 @@ export function installDomFenceRenderer(
     }
     const { key, context } = contextOf(row, block, settled)
     const node: ReactNode | null = renderResolvedFenceNode(raw, key, context)
-    // Null = no finished component yet (streaming half) or unrepairable:
-    // the stock code block stays visible until something renders. A settled
-    // unrepairable body warns once (the DOM channel has no visible
-    // diagnostic of its own — the stock block keeps the raw content).
+    // Null = no finished component yet (streaming half) or unrepairable: the
+    // stock code block stays visible. A settled unrepairable body also gets a
+    // VISIBLE diagnostic — console-only reporting left the defect invisible
+    // to the author (issues #158/#172).
     let payload = node
     if (payload === null) {
       if (settled || !looksLikeGenuiInProgress(raw)) {
-        if (settled) warnOnce(block, 'settled dsh-ui fence body does not parse; keeping the code block')
+        if (settled) {
+          renderDiagnostic(block, raw)
+          warnOnce(block, 'settled dsh-ui fence body does not parse; keeping the code block')
+        }
         return
       }
       // Streaming, spec-shaped, nothing renderable yet: show the skeleton
       // rather than a wall of half-written JSON.
       payload = <GenuiSkeleton />
     }
+    clearDiagnostic(block)
     // Mount FIRST, hide AFTER (issue #19): the stock block is only ever
     // hidden once a successfully mounted replacement stands next to it. A
     // mount failure leaves the original code block untouched — the final
@@ -521,6 +606,15 @@ export function installDomFenceRenderer(
    * observer microtask (before paint) so raw JSON never flashes between
    * chunks; the rAF sweep re-renders React state at its own pace. */
   function repairSurgery(): void {
+    // Diagnostics are plugin-owned DOM too: a host re-render that detaches or
+    // empties their container must be repaired before paint.
+    for (const [block, diagnostic] of Array.from(diagnostics)) {
+      if (!block.isConnected) {
+        clearDiagnostic(block)
+        continue
+      }
+      renderDiagnostic(block, diagnostic.raw)
+    }
     for (const mount of Array.from(mounts.values())) {
       const block = mount.block
       // The host replaced the row: the stock block is gone but our foreign
@@ -659,6 +753,26 @@ export function installDomFenceRenderer(
       }
     }
     repairSurgery()
+    // Diagnostics for blocks that are gone or were taken over must go with
+    // them; one whose DOM the host wiped is rebuilt here (sweep cadence, never
+    // inside the mutation callback).
+    for (const [block, diagnostic] of Array.from(diagnostics)) {
+      if (!block.isConnected || block.hasAttribute(PROCESSED)) {
+        clearDiagnostic(block)
+        continue
+      }
+      // Same re-verification the takeover path does: a settled block whose
+      // label is no longer dsh-ui is somebody else's fence, so our explanation
+      // would be about the wrong block.
+      if (isSettled(block)) {
+        const labelText = labelTextOf(block)
+        if (labelText !== '' && labelText !== 'dsh-ui') {
+          clearDiagnostic(block)
+          continue
+        }
+      }
+      rebuildWipedDiagnostic(block, diagnostic.raw)
+    }
     for (const block of findFenceCandidates()) {
       renderBlock(block)
     }
@@ -678,9 +792,17 @@ export function installDomFenceRenderer(
     // The latest removal owns the current tree if several commits were batched.
     for (const record of [...records].reverse()) {
       if (record.removedNodes.length === 0 || record.target.childNodes.length > 0) continue
-      const mount = [...mounts.values()].find(candidate => candidate.container === record.target)
-      if (mount === undefined || !mount.block.isConnected || isPanelRoot(mount.lastNode)) continue
-      mount.container.append(...record.removedNodes)
+      const target = record.target
+      const mount = [...mounts.values()].find(candidate => candidate.container === target)
+      if (mount !== undefined) {
+        if (!mount.block.isConnected || isPanelRoot(mount.lastNode)) continue
+        mount.container.append(...record.removedNodes)
+        continue
+      }
+      // The same surgery for a visible diagnostic the host emptied: re-append
+      // its own nodes instead of leaving the author without an explanation.
+      const diagnostic = [...diagnostics.values()].find(candidate => candidate.container === target)
+      if (diagnostic !== undefined) diagnostic.container.append(...record.removedNodes)
     }
     // Pre-paint pass: surgery repair only (cheap DOM ops); the React
     // re-render goes through the rAF-scheduled sweep.
@@ -708,5 +830,6 @@ export function installDomFenceRenderer(
       rafId = null
     }
     for (const block of Array.from(mounts.keys())) unmountBlock(block)
+    for (const block of Array.from(diagnostics.keys())) clearDiagnostic(block)
   }
 }

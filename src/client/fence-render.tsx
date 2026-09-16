@@ -9,7 +9,8 @@
  *   (`dom-fence.ts`) finds stock code blocks labelled `dsh-ui` and mounts
  *   {@link renderResolvedFenceNode} into its own React root, wrapped in the
  *   plugin-owned action context. An unrepairable body returns `null` so the
- *   stock code block stays visible.
+ *   stock code block stays visible, with {@link FenceDiagnostic} mounted above
+ *   it so the defect is never silent (issue #158).
  *
  * Structural types are declared locally on purpose: the context contract is
  * a data shape, and pristine hosts do not export the host-side type names.
@@ -89,6 +90,42 @@ function processSemanticFailure(raw: string): string | null {
  *    rendered. Once the streaming marker is gone, surface a compact diagnostic
  *    so the defect is visible instead of silent.
  */
+/**
+ * Explain why a ```dsh-ui body cannot render, as the one-line message both
+ * channels show. Returns null when there is nothing to report (the body is
+ * renderable, or it is an empty/streaming half).
+ *
+ * @param raw - the raw fence body.
+ * @returns the diagnostic text, or null.
+ */
+export function describeFenceFailure(raw: string): string | null {
+  const processDiagnostic = processSemanticFailure(raw)
+  if (processDiagnostic !== null) {
+    return `⚠️ dsh-ui ${processDiagnostic} —— 围栏保持为代码块；请修正后重发。`
+  }
+  if (raw.trim() === '') return null
+  const parseDiagnostic = describeJsonFailure(raw)
+  if (parseDiagnostic === null) return null
+  return `⚠️ dsh-ui fence JSON 解析失败${parseDiagnostic} —— 围栏保持为代码块；请让模型检查并修复 JSON 后重发。`
+}
+
+/**
+ * The visible diagnostic for a settled, unrenderable ```dsh-ui body.
+ *
+ * Shared by both channels: the registry channel renders it above its own
+ * fallback code block, the DOM channel above the host's stock code block. A
+ * fence that keeps degrading to raw JSON must say why it degraded — the
+ * console-only path left the defect invisible (issues #158/#172).
+ *
+ * @param raw - the raw fence body.
+ * @returns the alert strip, or null when the body has nothing to report.
+ */
+export function FenceDiagnostic({ raw }: { raw: string }): ReactNode {
+  const message = describeFenceFailure(raw)
+  if (message === null) return null
+  return <div style={FENCE_ERROR_STYLE} role="alert">{message}</div>
+}
+
 function FenceFallback({ raw, fenceKey }: { raw: string; fenceKey: Key }) {
   const ref = useRef<HTMLDivElement | null>(null)
   const [settled, setSettled] = useState(false)
@@ -96,20 +133,10 @@ function FenceFallback({ raw, fenceKey }: { raw: string; fenceKey: Key }) {
     const node = ref.current
     if (node !== null && node.closest('[data-streaming]') === null) setSettled(true)
   })
-  const processDiagnostic = settled ? processSemanticFailure(raw) : null
-  const parseDiagnostic = settled && processDiagnostic === null && raw.trim() !== '' ? describeJsonFailure(raw) : null
+  const diagnostic = settled ? <FenceDiagnostic raw={raw} /> : null
   return (
     <div ref={ref}>
-      {processDiagnostic !== null && (
-        <div style={FENCE_ERROR_STYLE} role="alert">
-          ⚠️ dsh-ui {processDiagnostic} —— 围栏保持为代码块；请修正后重发。
-        </div>
-      )}
-      {processDiagnostic === null && parseDiagnostic !== null && (
-        <div style={FENCE_ERROR_STYLE} role="alert">
-          ⚠️ dsh-ui fence JSON 解析失败{parseDiagnostic} —— 围栏保持为代码块；请让模型检查并修复 JSON 后重发。
-        </div>
-      )}
+      {diagnostic}
       <CodeBlock key={fenceKey} {...CODE_BLOCK_LABELS} code={`${raw}\n`} lang="dsh-ui" />
     </div>
   )

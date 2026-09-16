@@ -394,6 +394,70 @@ try {
     }
     if (pageErrors.length > 0) throw new Error(`公式渲染异常: ${pageErrors.join(' | ')}`)
     log('公式跨字段、深浅主题、窄卡布局和空白标签识别验证通过')
+
+    // Regression fixture for issue #172: two legal fence bodies the guard used
+    // to reject wholesale — the fence silently degraded to a raw JSON code
+    // block. Both must now render as UI, while a genuinely broken body must
+    // still stay a code block (all-or-nothing policy unchanged).
+    await page.evaluate(() => {
+      const fence = (marker, body) => {
+        const fixture = document.createElement('div')
+        fixture.setAttribute(marker, '')
+        const host = document.createElement('div')
+        host.className = 'md-code-block'
+        const label = document.createElement('div')
+        label.textContent = 'dsh-ui'
+        const pre = document.createElement('pre')
+        const code = document.createElement('code')
+        code.textContent = JSON.stringify(body)
+        pre.appendChild(code)
+        host.append(label, pre)
+        fixture.appendChild(host)
+        document.body.prepend(fixture)
+      }
+      // A: one stat carrying a metric list, next to a legal sibling node.
+      fence('data-genui-172-stat', { title: '进度快照', gap: 12, items: [
+        { type: 'stat', items: [{ label: '质量门进度', value: '1/5 施工中' }, { label: '阻塞项', value: '0' }] },
+        { type: 'callout', tone: 'info', title: '进度说明', content: '内容' },
+      ] })
+      // B: bare data-component root whose `items` is its record list.
+      fence('data-genui-172-steps', { type: 'steps', title: '修复策略', items: [
+        { title: '第一层', desc: 'a' }, { title: '第二层', desc: 'b' }, { title: '第三层', desc: 'c' },
+      ] })
+      // Control: missing required fields stays a code block (no silent green).
+      fence('data-genui-172-bad', { items: [{ type: 'stat' }] })
+    })
+    const statRow = page.locator('[data-genui-172-stat] [data-genui]')
+    await statRow.waitFor({ state: 'visible' })
+    const statText = await statRow.textContent()
+    for (const fragment of ['质量门进度', '施工中', '阻塞项', '进度说明']) {
+      assert.ok(statText.includes(fragment), `#172 A：渲染结果缺少 ${fragment}`)
+    }
+    assert.equal(await page.locator('[data-genui-172-stat] [data-genui] [data-genui]').count(), 0, '#172 A：不应出现多余的 col 包裹层')
+    const stepsBlock = page.locator('[data-genui-172-steps] [data-genui]')
+    await stepsBlock.waitFor({ state: 'visible' })
+    const stepsText = await stepsBlock.textContent()
+    for (const fragment of ['修复策略', '第一层', '第二层', '第三层']) {
+      assert.ok(stepsText.includes(fragment), `#172 B：渲染结果缺少 ${fragment}`)
+    }
+    // The stock code block is hidden only after a replacement mounted.
+    for (const marker of ['data-genui-172-stat', 'data-genui-172-steps']) {
+      const hidden = await page.locator(`[${marker}] > .md-code-block`).evaluate(block =>
+        block.style.display === 'none' && block.hasAttribute('data-genui-rendered'))
+      assert.ok(hidden, `${marker}：原始代码块应被替换隐藏`)
+    }
+    assert.equal(await page.locator('[data-genui-172-bad] [data-genui]').count(), 0, '#172 对照组：非法围栏不应渲染 UI')
+    const badKept = await page.locator('[data-genui-172-bad] > .md-code-block').evaluate(block =>
+      getComputedStyle(block).display !== 'none' && block.textContent.includes('"stat"'))
+    assert.ok(badKept, '#172 对照组：非法围栏应保留原始代码块')
+    // Issue #158: the rejected fence explains itself instead of failing silently.
+    const badAlert = page.locator('[data-genui-172-bad] .genui-dom-fence-diagnostic [role="alert"]')
+    await badAlert.waitFor({ state: 'visible' })
+    const badAlertText = await badAlert.textContent()
+    assert.ok(badAlertText.includes("type 'stat' requires label"), `#158 诊断应给出字段错误，实际：${badAlertText}`)
+    assert.ok(badAlertText.includes('保持为代码块'), '#158 诊断应说明围栏保持为代码块')
+    log('issue #172 围栏（stat 指标组、裸 steps 根、非法对照组+可见诊断）验证通过')
+
     log('smoke 模式：安装、激活、Diff/Code/JSON 真实渲染及复制均通过')
     await browser.close()
     await cleanup()
