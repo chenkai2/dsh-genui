@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### 修复
+- 字段名错误不再让整条围栏降级为代码块：`callout.content`（模型常写 text/body）、`keyvalue.pairs`（常写 items/rows/entries）、`diff.diffs`（常写 items）、`image`/`audio`/`video.src`（常写 url）、`code`/`copy`、`quiz.question`/`options`（常写 title/choices）补进别名表，规范化后照常渲染并保留 warning（#163、#172）。
+- `table` 只在给出行数据（`rows`/`data` 二维数组）而未给 `columns` 时，用首行作为表头推导列名，不再丢弃该节点；行列不齐时按 `列1…列N` 渲染，非二维体仍是契约错误（#172）。
+- `list` 的单元格式写法（`[["文本"]]` 会渲染成空列表）与 `{title, description}`（正文丢失），以及 `keyvalue.pairs` 的 `[[key, value]]` 写法，统一在规范化层转成规范形状（#172）。
+- 常驻提示词新增「字段名写错 = 整个围栏降级为代码块」的负例清单（callout 用 content、table 要 columns+rows、keyvalue 要 pairs），并压缩既有条目保持 #29 的 3200 字符预算。
+- `validate_dsh_ui` 的丢弃诊断从「声明 N / 解析 M」升级为逐节点归因：每个被丢弃节点给出位置、类型、**已写字段**与**缺少的必填字段**（`- items[0]（callout）缺少必填字段 content；已写字段 title`），原始错误列表保留（#163）。
+
 ## [0.11.1-preview.1] - 2026-09-15
 
 - 更新 preview 预发布验收宿主至 DSH 0.1.6-alpha.1；发布任务验证同一安装包后发布至 npm preview。

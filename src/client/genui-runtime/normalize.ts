@@ -52,7 +52,34 @@ function normalizeNode(value: unknown, path: string, warnings: GenuiDiagnostic[]
   if (type === 'row' || type === 'col' || type === 'grid' || type === 'card' || type === 'file-tree' || type === 'timeline' || type === 'breadcrumb') {
     if (type !== 'file-tree' && type !== 'timeline' && type !== 'breadcrumb') out.items = normalizeNodeArray(out.items, `${path}.items`)
   } else if (type === 'list' && Array.isArray(out.items)) {
-    out.items = out.items.map((child, index) => isNode(child) ? normalizeNodeValue(child, `${path}.items[${index}]`) : child)
+    // List items are a union (string | {title,desc} | nested node), and models
+    // routinely dump 1×N / N×1 table cells in place of the item: `[["文本"]]`
+    // renders as an EMPTY list and `{title, description}` loses its body
+    // (repair reads `desc`). Both are pure shape defects — normalize them here
+    // so validation, diagnostics, and repair all see the canonical item.
+    out.items = out.items.map((child, index) => {
+      if (isNode(child)) return normalizeNodeValue(child, `${path}.items[${index}]`)
+      if (Array.isArray(child) && child.length === 1 && typeof child[0] === 'string') return child[0]
+      const holder = record(child)
+      if (holder === undefined || !('description' in holder)) return holder === undefined ? child : { ...holder }
+      const normalizedHolder = { ...holder }
+      const description = normalizedHolder.description
+      delete normalizedHolder.description
+      if (!('desc' in normalizedHolder) && typeof description === 'string') normalizedHolder.desc = description
+      return normalizedHolder
+    })
+  } else if (type === 'keyvalue' && Array.isArray(out.pairs)) {
+    // Pair-as-array (`[[key, value], …]` or `[[key], …]`) is what a model
+    // writes when it treats keyvalue as a 2-column list. Canonicalize before
+    // validation: the record validator rejects every array entry ("must be an
+    // object"), and those errors take the whole fence down even though repair
+    // could read the data.
+    if (out.pairs.length > 0 && out.pairs.every(pair => Array.isArray(pair))) {
+      out.pairs = out.pairs.map(pair => {
+        const cells = pair as unknown[]
+        return { key: cells[0], value: cells.length > 1 ? cells[1] : '' }
+      })
+    }
   } else if (type === 'tabs' && Array.isArray(out.tabs)) {
     out.tabs = out.tabs.map((tab, index) => {
       const holder = record(tab)

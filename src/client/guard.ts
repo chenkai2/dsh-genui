@@ -154,6 +154,19 @@ function validateNestedRecordSchemas(
   }
 }
 
+/**
+ * Does this table state its columns implicitly, in a 2D `rows`/`data` body?
+ * Repair turns the leading row into the header (see `deriveTableColumns`), so
+ * validation must not report the missing `columns` that repair is about to
+ * supply — while still reporting it for bodies repair cannot read (a scalar
+ * `rows`, an empty array, a 1D list).
+ */
+function hasDerivableTableColumns(value: Record<string, unknown>): boolean {
+  const rows = value.rows !== undefined ? value.rows : value.data
+  if (!Array.isArray(rows) || rows.length === 0) return false
+  return Array.isArray(rows[0])
+}
+
 /** Validate the registry-declared presence and primitive shape of a native node. */
 function validateRegistryFields(
   value: Record<string, unknown>,
@@ -163,10 +176,11 @@ function validateRegistryFields(
 ): void {
   const type = String(value.type)
   const alreadyReported = (field: string): boolean => hasFieldError(errors, at, field)
+  const derivableField = type === 'table' && hasDerivableTableColumns(value) ? 'columns' : null
   for (const field of definition.required) {
     const kind = definition.fields[field]
     if (kind === undefined || value[field] === undefined) {
-      if (!alreadyReported(field)) errors.push(`${at}: type '${type}' requires ${field}${kind === undefined ? '' : ` (${fieldKindLabel(kind)})`}`)
+      if (field !== derivableField && !alreadyReported(field)) errors.push(`${at}: type '${type}' requires ${field}${kind === undefined ? '' : ` (${fieldKindLabel(kind)})`}`)
       continue
     }
     if (!fieldKindMatches(value[field], kind) && !alreadyReported(field)) errors.push(`${at}.${field} must be ${fieldKindLabel(kind)}`)
@@ -420,8 +434,24 @@ function repairNodeFields(value: unknown, ctx: RepairCtx, depth: number): GenuiN
           : Object.keys(rawRows[0] as Record<string, unknown>)
         rawRows = rawRows.map(row => keys.map(k => cellText((row as Record<string, unknown>)[k])))
       }
+      // Headerless rows: a 2D `rows`/`data` array with no `columns` states its
+      // own column names in its leading row, so derive them instead of
+      // dropping the node (and with it, the whole fence). A derivation the
+      // cell repair cannot reproduce (malformed cells) falls through to the
+      // existing drop-and-report behaviour.
+      let derived: { columns: string[]; rows: Array<Array<string | number>> } | null = null
+      if ((!Array.isArray(rawCols) || rawCols.length === 0)
+        && Array.isArray(rawRows) && rawRows.length > 0 && Array.isArray(rawRows[0])) {
+        const grid = repairRows(rawRows, GENUI_LIMITS.maxTableRows, GENUI_LIMITS.maxTableCols)
+        const candidate = grid === undefined || grid.length === 0 ? null : deriveTableColumns(grid)
+        if (candidate !== null
+          && repairRows(candidate.rows, GENUI_LIMITS.maxTableRows, GENUI_LIMITS.maxTableCols)?.length === candidate.rows.length) {
+          derived = candidate
+          rawCols = candidate.columns
+        }
+      }
       const columns = repairStrings(rawCols, GENUI_LIMITS.maxTableCols, 128)
-      const rows = repairRows(rawRows, GENUI_LIMITS.maxTableRows, GENUI_LIMITS.maxTableCols)
+      const rows = repairRows(derived === null ? rawRows : derived.rows, GENUI_LIMITS.maxTableRows, GENUI_LIMITS.maxTableCols)
       if (columns === undefined || rows === undefined) return null
       // Optional per-column cell types; unknown entries degrade to 'text'.
       const rawTypes = Array.isArray(v.types) ? v.types : undefined
@@ -727,7 +757,7 @@ function repairListItems(
     const o = obj(item)
     const title = o === undefined ? undefined : str(o.title, GENUI_LIMITS.maxString)
     if (title !== undefined) {
-      out.push({ title, ...opt('desc', o === undefined ? undefined : str(o.desc, GENUI_LIMITS.maxString)) })
+      out.push({ title, ...opt('desc', o === undefined ? undefined : str(o.desc, GENUI_LIMITS.maxString) ?? str(o.description, GENUI_LIMITS.maxString)) })
       continue
     }
     if (o !== undefined && typeof o.type === 'string') {
@@ -759,6 +789,36 @@ function repairRows(v: unknown, rowCap: number, colCap: number): Array<Array<str
     if (cells.length > 0) out.push(cells)
   }
   return out
+}
+
+/** Left-aligned, undecorated columns for a table whose rows came without one. */
+function derivedColumnNames(count: number): string[] {
+  return Array.from({ length: count }, (_unused, index) => `列${index + 1}`)
+}
+
+/**
+ * Derive `columns` for a table that shipped only rows, without inventing
+ * content: the leading cell array is adopted as the header row and removed
+ * from the body — the shape both JSON table dumps and DataFrame-shaped
+ * exports are meant to be read as. Returns null when no unambiguous
+ * derivation exists (ragged rows) so the caller keeps its existing
+ * drop-and-report behaviour instead of rendering a fabricated header.
+ */
+function deriveTableColumns(rows: Array<Array<string | number>>): { columns: string[]; rows: Array<Array<string | number>> } | null {
+  const header = rows[0]
+  if (header === undefined || header.length === 0) return null
+  const body = rows.slice(1)
+  if (body.length === 0) {
+    // Header-only capture (a model dumping just its result header): render the
+    // stated columns with an empty body rather than fabricating a header row.
+    const columns = header.map(cell => String(cell).trim())
+    return columns.every(column => column !== '') ? { columns, rows: [] } : null
+  }
+  if (body.every(row => row.length === header.length)) {
+    return { columns: header.map(cell => String(cell).trim()), rows: body }
+  }
+  // Ragged body: nothing states the column names, so the leading row is data.
+  return { columns: derivedColumnNames(header.length), rows }
 }
 
 function repairChartData(v: unknown, cap: number): Array<{ label: string; value: number; color?: string }> | undefined {
@@ -1744,7 +1804,10 @@ function validateNode(value: unknown, depth: number, at: string, errors: string[
       }
       break
     case 'table':
-      if (!Array.isArray(v.columns)) errors.push(`${at}: type 'table' requires columns (array)`)
+      // `columns` may be satisfied by the 2D body itself (repair derives the
+      // header from the leading row); only a body that cannot state its
+      // columns is a contract error.
+      if (!Array.isArray(v.columns) && !hasDerivableTableColumns(v)) errors.push(`${at}: type 'table' requires columns (array)`)
       if (!Array.isArray(v.rows)) errors.push(`${at}: type 'table' requires rows (array)`)
       if (v.types !== undefined && !Array.isArray(v.types)) {
         errors.push(`${at}.types must be an array of column cell types`)

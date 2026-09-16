@@ -94,22 +94,24 @@ export const GENUI_SECTION_TEXT = `You can render interactive UI components INSI
 
 Allowed \`type\` values; the \`genui\` skill, when available, carries the full content→component mapping and per-component field details:
 
-- 布局: text · row · col · grid · card · divider · spacer · hero（封面块：超大数字 + 标题 + tone 渐变底色，一条回答最多一个）
-- 展示: badge · stat · progress · list · table · keyvalue · avatar · audio · video · timeline · file-tree · breadcrumb · callout · steps · diff · json · code · copy
+- 布局: text · row · col · grid · card · divider · spacer · hero（封面块，一条回答最多一个）
+- 展示: badge · stat · progress · list · table · keyvalue · timeline · file-tree · breadcrumb · callout · steps · diff · json · code · copy · avatar · audio · video
 - 图表: chart {"kind":"bars|line|donut","data":[{"label":"...","value":n}],"series":[{"label":"...","data":[...]}]?,"horizontal":true?,"stacked":true?}（series：bars 分组/堆叠 / line 多序列；horizontal 横向柱） · echart (preset 名或 option 直通，预设清单见 skill) · plot (函数图)
 - 交互: button · input · textarea · select · checkbox · switch · slider · radio · submit · quiz · link · tabs · accordion
-- 高级: mermaid (流程图/时序/类图/甘特/饼图/ER/状态/旅程，关键字见 skill) · diagram (架构/流程图) · scene3d (3D WebGL)
+- 高级: mermaid (流程图/时序/甘特/ER 等，关键字见 skill) · diagram (架构/流程图，27 种 kind) · scene3d (3D WebGL)
 
 **默认就该出 UI**：出现下列情况至少出一个围栏：
 - ≥3 条并列要点 → \`list\`；数字对比 → \`table\`；指标/进度/状态 → \`stat\`/\`progress\`/\`badge\`
 - 步骤/时间线 → \`steps\`/\`timeline\`/\`mermaid\`；架构/流程 → \`diagram\` 或 \`mermaid\`；风险/结论 → \`callout\`；代码/改动 → \`code\`/\`diff\`/\`json\`
-- 行内富文本：\`text\`/\`list\`/表格文本列/\`keyvalue\`/\`callout\` 里可写 $公式$、$$块公式$$、\`code\`、**加粗**、==高亮==、[文字](url)：重点留在句中，不必为一个词单起组件。
-- 默认无卡 ≠ 少用组件：硬触发照常出组件，**组件多不是问题**——判据是每个组件承载不同信息、有焦点与层次、同一批数据不重复表达。卡片只用于并排项与数据对象；单段文字用「标题 + 正文 + 间距」。
+- 行内富文本：\`text\`/\`list\`/表格文本列/\`keyvalue\`/\`callout\` 里可写 $公式$、$$块公式$$、\`code\`、**加粗**、==高亮==、[文字](url)。
+- 默认无卡 ≠ 少用组件：硬触发照常出组件，**组件多不是问题**——判据是每个组件承载不同信息、有焦点与层次。卡片只用于并排项与数据对象；单段文字用「标题 + 正文 + 间距」。
 
 **发回答前最后自检一次**：这段内容里有没有 ≥3 条并列要点、任何对比、任何数字/指标、任何步骤或流程？有就先转成组件再开口。**状态汇报、进度说明、提交与改动清单同样算**。
-- 趋势/占比 → \`chart\`（≤8 点）或 \`echart\`（多序列/要交互时）；配色默认跟随主题，只有语义需要时才用 \`palette\` / \`card.accent\`；排版用 grid 子节点的 \`"span":2\` 跨列做宽窄混排（bento），不要一列方块堆到底；数据多时给 \`table\`/\`chart\`/\`list\` 配一个 \`input\`(id) + \`filter\` 绑定，读者能就地筛选，不用再问一遍
+- 趋势/占比 → \`chart\`（≤8 点）或 \`echart\`（多序列/要交互时）；配色默认跟随主题，只有语义需要时才用 \`palette\`/\`card.accent\`；grid 子节点用 \`"span":2\` 跨列做宽窄混排；数据多时给 \`table\`/\`chart\`/\`list\` 配一个 \`input\`(id) + \`filter\` 绑定，读者能就地筛选。
 
-**字段速查**（完整见 genui skill）：\`stat\` \`{"label","value","delta"?}\` · \`table\` \`{"columns":[...],"rows":[[...]],"types"?,"total"?:true,"details"?:[[...]],"filter"?:id,"export"?:true}\` · \`callout\` \`{"tone":"info|success|warning|error","title","content"}\` · \`progress\` \`{"value":0-100,"label"?,"variant"?,"target"?}\` · \`keyvalue\` \`{"pairs":[{"key","value"}]}\` · \`steps\` \`{"steps":[{"title","desc"?}]}\`
+**字段速查**（完整见 genui skill）：\`stat\` \`{"label","value","delta"?}\` · \`table\` \`{"columns":[...],"rows":[[...]],"types"?,"total"?:true,"details"?:[[...]],"filter"?:id,"export"?:true}\` · \`progress\` \`{"value":0-100,"label"?,"variant"?,"target"?}\` · \`keyvalue\` \`{"pairs":[{"key","value"}]}\` · \`steps\` \`{"steps":[{"title","desc"?}]}\`
+
+**字段名写错 = 整个围栏降级为代码块**（该组件被丢弃）：\`callout\` 正文是 \`content\` 不是 text/body；\`table\` 要 \`columns\`+\`rows\` 不是 data；\`keyvalue\` 要 \`pairs[{key,value}]\` 不是 items。不确定就调 \`validate_dsh_ui\`。
 
 Rules:
 - Match the user’s language in prose and UI text. Chinese examples are schema examples, not a language instruction. Keep JSON keys/type values unchanged.
