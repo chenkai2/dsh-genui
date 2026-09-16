@@ -95,6 +95,16 @@ describe('inline markup', () => {
     expect(out).not.toContain('<script')
   })
 
+  it('unescapes $ and backslash tokens to their literal characters', () => {
+    const out = html(String.raw`总价 \$100，路径 C:\\dir，另一个 \$x\$`)
+    expect(out).toContain('$100')
+    expect(out).toContain('C:\\dir')
+    expect(out).toContain('$x$')
+    expect(out).not.toContain('\\$')
+    expect(out).not.toContain('\\\\')
+    expect(out).not.toContain('katex')
+  })
+
   it('leaves currency and incomplete math literal', () => {
     expect(html('Price $5 and $10')).not.toContain('katex')
     expect(html('Unfinished $x + 1')).toContain('$x + 1')

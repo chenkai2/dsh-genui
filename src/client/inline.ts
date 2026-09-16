@@ -38,6 +38,10 @@ export function renderInline(text: string, allowLinks = true, depth = 0): ReactN
     if (index > last) out.push(text.slice(last, index))
     if (token.startsWith('`')) {
       out.push(createElement('code', { key: key++, className: css.inlineCode }, token.slice(1, -1)))
+    } else if (token === '\\$' || token === '\\\\') {
+      // Escaped markers: the regex consumed the backslash to keep the literal
+      // character from opening math/emphasis, so render it without the escape.
+      out.push(token.slice(1))
     } else if (token.startsWith('$') || token.startsWith('\\(') || token.startsWith('\\[')) {
       const display = token.startsWith('$$') || token.startsWith('\\[')
       const width = token.startsWith('$') && !display ? 1 : 2
