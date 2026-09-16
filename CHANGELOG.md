@@ -2,7 +2,14 @@
 
 ## [Unreleased]
 
+### 新增
+- DOM 通道对被拒绝的围栏给出**可见诊断**：settled 之后仍无法渲染的 dsh-ui 围栏，会在原始代码块上方显示红色诊断条（字段错误或 JSON 解析原因），原始内容保留；此前只有 `console.warn`，围栏的作者看不到失败原因（#158）。
+- 可选的自修闭环 `fenceFeedback`（默认关闭，profile 配置 `fenceFeedback: true` 开启）：回复中的 dsh-ui 围栏未能渲染时，通过宿主的 `agent/turn-stopping` 边界把一条插件来源的修正请求 steer 进**同一回合**，让模型重发修正版。边界：每回合最多一次、同一围栏内容最多一次、子代理会话不触发、精确匹配 `dsh-ui` 围栏、发送前记账、取消的回合不触发（#160）。
+
 ### 修复
+- 根形状判定不再被重载的 `items` 骗过：根对象带白名单 `type` 时优先按**单组件根**处理（`{"type":"steps","items":[…]}` 此前被当成信封，步骤记录逐个被丢弃后整份围栏被拒）；包装结果改为纯 spec 以免守卫二次包裹，根上的 `title` 在组件无该字段时上提为区块标题（#172）。
+- `stat` 指标组 `{"type":"stat","items":[{label,value},…]}` 归一化为一行多个 `stat`（规范的多指标写法），不再丢弃该节点并连坐同围栏里合法的兄弟节点（#172）。
+- `radio` / `select` / `quiz` 的 `items` 别名到 `options`，与 #175 的别名表取并集（#172）。
 - 字段名错误不再让整条围栏降级为代码块：`callout.content`（模型常写 text/body）、`keyvalue.pairs`（常写 items/rows/entries）、`diff.diffs`（常写 items）、`image`/`audio`/`video.src`（常写 url）、`code`/`copy`、`quiz.question`/`options`（常写 title/choices）补进别名表，规范化后照常渲染并保留 warning（#163、#172）。
 - `table` 只在给出行数据（`rows`/`data` 二维数组）而未给 `columns` 时，用首行作为表头推导列名，不再丢弃该节点；行列不齐时按 `列1…列N` 渲染，非二维体仍是契约错误（#172）。
 - `list` 的单元格式写法（`[["文本"]]` 会渲染成空列表）与 `{title, description}`（正文丢失），以及 `keyvalue.pairs` 的 `[[key, value]]` 写法，统一在规范化层转成规范形状（#172）。

@@ -270,8 +270,10 @@ function repairedContainsType(node: unknown, type: string): boolean {
   return Object.values(record).some(child => repairedContainsType(child, type))
 }
 
-/** Report dropped components without hiding their actionable field errors. */
-function droppedNodeFailure(processed: GenuiProcessResult, raw: unknown): string | undefined {
+/** Report dropped components without hiding their actionable field errors.
+ *  Exported for the fence feedback loop (#160), so a steered correction quotes
+ *  exactly what the validator tool reports. */
+export function droppedNodeFailure(processed: GenuiProcessResult, raw: unknown): string | undefined {
   if (!processed.errors.some(error => error.startsWith('repair dropped '))) return undefined
   const dropped = processed.declaredNativeCount - processed.renderedNativeCount
   const diagnosis = droppedNodeDiagnosis(processed, raw)
