@@ -17,7 +17,8 @@
  */
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type Key, type ReactNode } from 'react'
 import { CodeBlock } from '@deepseek-ai/dsh-client-ui-primitives'
-import { CODE_BLOCK_LABELS } from './primitive-labels.ts'
+import { codeBlockLabels } from './primitive-labels.ts'
+import { t, useT } from './i18n/index.ts'
 import { ErrorBoundary } from './ErrorBoundary.tsx'
 import { GenuiBlock } from './GenuiBlock.tsx'
 import { isRenderableProcess, processGenuiSpec } from './guard.ts'
@@ -69,8 +70,8 @@ function processSemanticFailure(raw: string): string | null {
   if (isRenderableProcess(processed)) return null
   const chartErrors = formatChartProcessErrors(processed.errors)
   return chartErrors === null
-    ? `GenUI 字段验证失败：${processed.errors.join('；')}`
-    : `chart 字段验证失败：${chartErrors}`
+    ? t('err.fieldValidation', { errors: processed.errors.join('；') })
+    : t('err.chartValidation', { errors: chartErrors })
 }
 
 /**
@@ -101,12 +102,12 @@ function processSemanticFailure(raw: string): string | null {
 export function describeFenceFailure(raw: string): string | null {
   const processDiagnostic = processSemanticFailure(raw)
   if (processDiagnostic !== null) {
-    return `⚠️ dsh-ui ${processDiagnostic} —— 围栏保持为代码块；请修正后重发。`
+    return t('err.fenceKeptAsCode', { diagnostic: processDiagnostic })
   }
   if (raw.trim() === '') return null
   const parseDiagnostic = describeJsonFailure(raw)
   if (parseDiagnostic === null) return null
-  return `⚠️ dsh-ui fence JSON 解析失败${parseDiagnostic} —— 围栏保持为代码块；请让模型检查并修复 JSON 后重发。`
+  return t('err.fenceParse', { diagnostic: parseDiagnostic })
 }
 
 /**
@@ -121,12 +122,16 @@ export function describeFenceFailure(raw: string): string | null {
  * @returns the alert strip, or null when the body has nothing to report.
  */
 export function FenceDiagnostic({ raw }: { raw: string }): ReactNode {
+  // Subscribe so a language switch re-renders an already-visible diagnostic.
+  useT()
   const message = describeFenceFailure(raw)
   if (message === null) return null
   return <div style={FENCE_ERROR_STYLE} role="alert">{message}</div>
 }
 
 function FenceFallback({ raw, fenceKey }: { raw: string; fenceKey: Key }) {
+  // Subscribed for the CodeBlock copy labels below.
+  useT()
   const ref = useRef<HTMLDivElement | null>(null)
   const [settled, setSettled] = useState(false)
   useLayoutEffect(() => {
@@ -137,7 +142,7 @@ function FenceFallback({ raw, fenceKey }: { raw: string; fenceKey: Key }) {
   return (
     <div ref={ref}>
       {diagnostic}
-      <CodeBlock key={fenceKey} {...CODE_BLOCK_LABELS} code={`${raw}\n`} lang="dsh-ui" />
+      <CodeBlock key={fenceKey} {...codeBlockLabels()} code={`${raw}\n`} lang="dsh-ui" />
     </div>
   )
 }
@@ -216,7 +221,7 @@ function renderInlineFence(key: Key, context: GenuiFenceContext | undefined, spe
     // Repaired specs render SILENTLY: once the UI renders, no amber note
     // tells the user something was wrong — only an unrecoverable body keeps
     // the red diagnostic.
-    <ErrorBoundary key={JSON.stringify([sessionId, key])} label="该界面">
+    <ErrorBoundary key={JSON.stringify([sessionId, key])} label={t('err.boundary.fence')}>
       <GenuiBlock
         spec={spec}
         animateEntrance={context?.source === undefined}
