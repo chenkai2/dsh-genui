@@ -57,6 +57,8 @@ function normalizeNode(value: unknown, path: string, warnings: GenuiDiagnostic[]
     // renders as an EMPTY list and `{title, description}` loses its body
     // (repair reads `desc`). Both are pure shape defects — normalize them here
     // so validation, diagnostics, and repair all see the canonical item.
+    // Plain strings are already a first-class item shape (the renderer prints
+    // them inline), so they are left untouched.
     out.items = out.items.map((child, index) => {
       if (isNode(child)) return normalizeNodeValue(child, `${path}.items[${index}]`)
       if (Array.isArray(child) && child.length === 1 && typeof child[0] === 'string') return child[0]

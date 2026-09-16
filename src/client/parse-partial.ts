@@ -24,8 +24,7 @@
  * only real streaming samples proving a recovery shortfall justify switching
  * to a tokenizing parser.
  */
-import { isGenuiSpec, type GenuiSpec } from './spec.ts'
-import { wrapSingleComponentRoot } from './spec.ts'
+import { isGenuiSpec, normalizeSpecRoot, type GenuiSpec } from './spec.ts'
 
 /** Default repair-candidate budget (adjustable; see the design doc). */
 export const MAX_PARTIAL_REPAIR_ATTEMPTS = 32
@@ -119,11 +118,11 @@ export function collectPartialCandidates(raw: string): { candidates: PartialCand
 function trySpec(candidate: string, allowSingleComponentRoot: boolean): GenuiSpec | null {
   try {
     const value: unknown = JSON.parse(candidate)
-    if (isGenuiSpec(value)) return value
-    // Single-component roots are part of the documented fence vocabulary
-    // (e.g. a bare {"type":"callout",…} body) — wrap into a col so the
-    // items-gated pipeline renders them (panel/append hoisted).
-    return allowSingleComponentRoot ? wrapSingleComponentRoot(value) : null
+    // `normalizeSpecRoot` resolves the spec-vs-single-component question once
+    // (a root carrying `type` is a component, even when it also has `items`),
+    // so a `{"type":"list","items":["文本",…]}` body wraps instead of
+    // degrading to an empty spec.
+    return allowSingleComponentRoot ? normalizeSpecRoot(value) : (isGenuiSpec(value) ? value : null)
   } catch {
     return null
   }

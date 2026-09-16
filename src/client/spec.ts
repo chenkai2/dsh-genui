@@ -808,6 +808,24 @@ export function parseGenuiSpec(raw: string): GenuiSpec | null {
   } catch {
     return null
   }
+  return normalizeSpecRoot(value)
+}
+
+/**
+ * Coerce a parsed fence body into a renderable spec root.
+ *
+ * Two documented body shapes reach this point:
+ * - a spec root (`{items: [node, …], title?, gap?}`), used as-is;
+ * - a single component (`{type: 'callout', …}`), wrapped into a col so the
+ *   items-gated pipeline renders it (`panel`/`append` hoist onto the wrapper).
+ *
+ * The ambiguous third shape — `{type: 'list', items: ['文本', …]}` — is a
+ * single component whose payload happens to be an array: `isGenuiSpec` must
+ * not claim it as a spec root (its `items` are not nodes, and the stray root
+ * `type` is then an unknown spec field), or the whole fence renders EMPTY.
+ * Recognising the root `type` first routes it through the component path.
+ */
+export function normalizeSpecRoot(value: unknown): GenuiSpec | null {
   if (isGenuiSpec(value)) return value
   // Single-component roots are part of the documented fence vocabulary
   // (e.g. {"type":"callout","tone":"info","title":"…","content":"…"} as the
@@ -837,10 +855,17 @@ export function wrapSingleComponentRoot(value: unknown): GenuiSpec | null {
   return root
 }
 
-/** Basic structural guard: is this object a valid GenuiSpec? */
+/**
+ * Basic structural guard: is this object a valid GenuiSpec?
+ *
+ * A root that also carries a component `type` is NOT a spec: `items` then
+ * belongs to that component (a `list` payload, for example), and reading it as
+ * the spec root drops every string entry and leaves an empty render.
+ */
 export function isGenuiSpec(value: unknown): value is GenuiSpec {
   if (typeof value !== 'object' || value === null) return false
-  const v = value as { items?: unknown; title?: unknown; gap?: unknown }
+  const v = value as { type?: unknown; items?: unknown; title?: unknown; gap?: unknown }
+  if (typeof v.type === 'string' && v.type !== '') return false
   if (!Array.isArray(v.items)) return false
   if (v.title !== undefined && typeof v.title !== 'string') return false
   if (v.gap !== undefined && typeof v.gap !== 'number') return false

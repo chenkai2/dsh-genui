@@ -11,6 +11,7 @@
 // means a user sees raw JSON instead of the UI the model intended.
 import { describe, expect, it } from 'vitest'
 import { processGenuiSpec, isRenderableProcess } from '../src/client/guard.ts'
+import { isGenuiSpec, normalizeSpecRoot } from '../src/client/spec.ts'
 import { parsePartialGenuiSpec } from '../src/client/parse-partial.ts'
 
 /** The render decision the fence channels actually make, minus React. */
@@ -114,6 +115,35 @@ describe('field-name regression corpus (real-session fences)', () => {
       { type: 'list', items: [{ title: '先定 R1 口径', desc: '恢复 fetch_one' }] },
       { type: 'keyvalue', pairs: [{ key: '设计文档', value: 'plans/x.md' }] },
     ])
+  })
+
+  it('renders a component-with-items root instead of an empty spec', () => {
+    // Third real-session defect class (2026-09-16 audit): a SINGLE component
+    // body whose payload is an array — `{"items":["…","…"],"type":"list"}`.
+    // `isGenuiSpec` used to claim it as a spec root (it has an `items` array),
+    // the root `type` was then an unknown spec field, every string entry was
+    // dropped and the fence rendered EMPTY. Result: `declared 0 / rendered 0`.
+    const raw = '{"items":["**t9 的连锁副作用已处理**：平台据 t9 的 needs_revision 自动派生了两张卡。","**排期噪音**：不影响 t2 的工作，也不需要 t8 感知。"],"type":"list"}'
+    expect(renders(raw)).toBe(true)
+    const parsed = parsePartialGenuiSpec(raw)
+    const processed = processGenuiSpec(parsed as unknown)
+    expect(processed.errors).toEqual([])
+    // Repair unwraps the single-item col wrapper during canonicalization, so
+    // the rendered tree is the list itself with both entries intact.
+    expect(processed.repaired?.items).toEqual([{
+      type: 'list',
+      items: [
+        '**t9 的连锁副作用已处理**：平台据 t9 的 needs_revision 自动派生了两张卡。',
+        '**排期噪音**：不影响 t2 的工作，也不需要 t8 感知。',
+      ],
+    }])
+
+    // A root carrying a component `type` is a component, never a spec root —
+    // regardless of whether it also carries an `items` array.
+    expect(isGenuiSpec({ items: ['x'], type: 'list' })).toBe(false)
+    expect(isGenuiSpec({ title: 't', gap: 8, items: [{ type: 'text', content: 'a' }] })).toBe(true)
+    expect(normalizeSpecRoot({ type: 'row', gap: 8, items: [{ type: 'text', content: 'a' }] }))
+      .toEqual({ type: 'col', items: [{ type: 'row', gap: 8, items: [{ type: 'text', content: 'a' }] }] })
   })
 
   it('leaves canonical bodies untouched (no alias churn)', () => {

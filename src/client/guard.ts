@@ -425,6 +425,19 @@ function repairNodeFields(value: unknown, ctx: RepairCtx, depth: number): GenuiN
       // `data` alias) flatten to 2D rows keyed by the column keys — without
       // this the whole node is dropped for "missing 2D rows" and the user
       // sees nothing (issue #42).
+      // Tetris-shaped `columns` (real-session sample): the model opened the
+      // header array, closed it after the header cells, and then kept writing
+      // the rows INSIDE that same array — `"columns":["A","B"],["r1c1",…],…`.
+      // The cell arrays are unambiguously rows, so separate them out instead
+      // of dropping the node for a "malformed columns" body.
+      if (Array.isArray(rawCols) && rawCols.some(entry => Array.isArray(entry))) {
+        const headers = rawCols.filter(entry => !Array.isArray(entry))
+        const nestedRows = rawCols.filter((entry): entry is unknown[] => Array.isArray(entry))
+        if (headers.length > 0) {
+          rawCols = headers
+          if (!Array.isArray(rawRows)) rawRows = nestedRows
+        }
+      }
       if (Array.isArray(rawCols) && rawCols.length > 0 && typeof rawCols[0] === 'object' && rawCols[0] !== null) {
         rawCols = rawCols.map(c => columnHeaderText(c))
       }
