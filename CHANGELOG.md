@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### 修复
+- **离散交互不再被防抖合并**：`button` / `checkbox` / `radio` / `switch` / `select` / `input` / `textarea` / `submit` / `quiz` 等一次手势一次事件的交互**立即逐次回传**。此前 300ms 防抖以 action 名为 key，快速连点同 action 名的控件会静默丢弃前几次事件，模型收到残缺交互状态，与 SKILL.md 承诺的 checkbox「默认保持逐次 action 行为」矛盾（#178）。
+- `slider` 拖拽保留防抖合并，且 key 从「action 名」改为「action 名 + `id`」：同一滑块的连续拖动仍合并成最后一次的值，多个共享 action 名的滑块互不挤占（#178）。
+
 ### 新增
 - **界面语言（i18n）**：浏览器侧全部用户可见文案改由 `en` / `zh` 两套词典驱动（`src/client/i18n/`），不再硬编码。语言解析顺序为「宿主语言偏好 → 浏览器 `navigator.languages` → 英文」；英文同时作为**逐键兜底**，因此词典缺键只会回退、绝不会把界面渲染成空白。
 - **跟随 DSH 语言设置**：宿主提供 `@deepseek-ai/dsh-client-locale` 时，插件把两套词典注册到 `genui` 命名空间，并镜像宿主的当前语言（含后续切换）。该服务以**可选方式**读取、不写进 `inject`，所以不带该服务的宿主照常渲染（自动降级为浏览器探测）。

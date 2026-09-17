@@ -19,12 +19,19 @@ import type { GenuiSpec } from './spec.ts'
 export const GENUI_ACTION_DEBOUNCE_MS = 300
 
 /**
- * Wrap the harness action callback with the per-action trailing debounce.
- * Absent provider = v1 behavior (components are display-only, callback
- * stays undefined). Pending timers are cleared on unmount so a click that
- * never fired does not leak into the next mount. Timers live in one stable
- * map and read the latest handler through a ref, so provider updates cannot
- * leave stale callbacks behind.
+ * Wrap the harness action callback. DISCRETE gestures (button, checkbox,
+ * radio, switch, select, input, textarea, submit, quiz — every payload type
+ * but `slider`) deliver immediately: each is one user intent, and SKILL.md
+ * promises per-interaction `action` behavior, so collapsing them would
+ * silently drop interactions from the model's view. Only the CONTINUOUS
+ * gesture (slider drag) goes through the trailing debounce, keyed by action
+ * name + payload `id`, so one control's drag still collapses to its last
+ * value while distinct sliders sharing an action name never displace each
+ * other. Absent provider = v1 behavior (components are display-only,
+ * callback stays undefined). Pending timers are cleared on unmount so a
+ * drag that never fired does not leak into the next mount. Timers live in
+ * one stable map and read the latest handler through a ref, so provider
+ * updates cannot leave stale callbacks behind.
  */
 function useDebouncedAction(onAction: GenuiBlockProps['onAction'] | undefined): GenuiBlockProps['onAction'] {
   const pending = useRef(new Map<string, ReturnType<typeof setTimeout>>())
@@ -39,10 +46,15 @@ function useDebouncedAction(onAction: GenuiBlockProps['onAction'] | undefined): 
   }, [])
 
   const debounced = useCallback((action: string, payload: Record<string, unknown>): void => {
-    const existing = pending.current.get(action)
+    if (payload.type !== 'slider') {
+      actionRef.current?.(action, payload)
+      return
+    }
+    const key = `${action}\u0000${typeof payload.id === 'string' ? payload.id : ''}`
+    const existing = pending.current.get(key)
     if (existing !== undefined) clearTimeout(existing)
-    pending.current.set(action, setTimeout(() => {
-      pending.current.delete(action)
+    pending.current.set(key, setTimeout(() => {
+      pending.current.delete(key)
       actionRef.current?.(action, payload)
     }, GENUI_ACTION_DEBOUNCE_MS))
   }, [])
