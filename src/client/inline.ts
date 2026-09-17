@@ -20,10 +20,13 @@ function InlineMath({ source, display }: { source: string; display: boolean }) {
 
 // Code is literal. TeX tokens are opaque to emphasis/link parsing; the other
 // rich-text tokens recurse so **$x$** and ==\\(x\\)== work without nested DOM roots.
-const INLINE = /`[^`\n]+`|\\\\|\\\$|(?<![\\$])\$\$(?:\\.|[^\\])*?\$\$|\\\[(?:\\(?!\])[^]|[^\\])*?\\\]|\\\((?:\\(?!\))[^]|[^\\])*?\\\)|(?<![\\$])\$(?!\s|\$)(?:\\.|[^$\\\n])+(?<!\s)\$(?!\d|\$)|\*\*[\s\S]+?\*\*|==[\s\S]+?==|\[[^\]\n]+\]\([^)\s]+\)/g
+// A real newline in the string is its own token rendered as <br>, so text
+// fields express a line break via JSON "\n" — no HTML parsing, and the
+// single-line (nowrap) chrome classes never contain one.
+const INLINE = /`[^`\n]+`|\\\\|\\\$|(?<![\\$])\$\$(?:\\.|[^\\])*?\$\$|\\\[(?:\\(?!\])[^]|[^\\])*?\\\]|\\\((?:\\(?!\))[^]|[^\\])*?\\\)|(?<![\\$])\$(?!\s|\$)(?:\\.|[^$\\\n])+(?<!\s)\$(?!\d|\$)|\*\*[\s\S]+?\*\*|==[\s\S]+?==|\[[^\]\n]+\]\([^)\s]+\)|\r?\n/g
 
 export function hasInlineMarkup(text: string): boolean {
-  return typeof text === 'string' && /[`*=$\\]|\[/.test(text)
+  return typeof text === 'string' && /[`*=$\\\n\r]|\[/.test(text)
 }
 
 /** Render safe phrasing content, usable in headings, buttons and labels too. */
@@ -36,7 +39,9 @@ export function renderInline(text: string, allowLinks = true, depth = 0): ReactN
     const index = match.index ?? 0
     const token = match[0]
     if (index > last) out.push(text.slice(last, index))
-    if (token.startsWith('`')) {
+    if (token === '\n' || token === '\r\n') {
+      out.push(createElement('br', { key: key++ }))
+    } else if (token.startsWith('`')) {
       out.push(createElement('code', { key: key++, className: css.inlineCode }, token.slice(1, -1)))
     } else if (token === '\\$' || token === '\\\\') {
       // Escaped markers: the regex consumed the backslash to keep the literal

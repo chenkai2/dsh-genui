@@ -130,8 +130,9 @@ description: "Render structured interactive UI inline in your reply via the dsh-
 | `**加粗**` | 强调（不换行、不成块） |
 | `==高亮==` | 极淡底色标记 |
 | `[文字](https://…)` | 行内链接（http/https/mailto；非法目标退化为纯文字） |
+| JSON `"\n"`（真实换行符） | 换行——**多段文字写同一个字段**，不要为换行拆成多个节点 |
 
-不嵌套、不解析 HTML（每个标记生成 React 元素，不走 innerHTML）；标记没闭合时原样显示。数值列 / badge / spark 单元格不解析（数字没什么可强调的）。
+不嵌套、不解析 HTML（每个标记生成 React 元素，不走 innerHTML；`<br>` 字面显示，换行用 `"\n"`）；标记没闭合时原样显示。数值列 / badge / spark 单元格不解析（数字没什么可强调的）。
 
 ## 回答级版式：默认无卡，焦点唯一
 
