@@ -9,6 +9,7 @@ import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import css from '../GenuiBlock.module.css'
 import { GENUI_LIMITS } from '../genui-runtime/index.ts'
 import { renderInline } from '../inline.ts'
+import { t } from '../i18n/index.ts'
 import type { GenuiList, GenuiNode } from '../spec.ts'
 import type { AnswersState, GenuiBlockProps } from './state.ts'
 import { AudioNode, avatarColor, ClickFeedbackButton, VideoNode } from './basic.tsx'
@@ -394,7 +395,7 @@ export function renderNode(
           <div className={css.track}>
             <div className={css.fill} style={{ width: `${v}%` }} />
             {node.target !== undefined && (
-              <span className={css.targetMark} style={{ left: `${node.target}%` }} title={`目标 ${node.target}%`} />
+              <span className={css.targetMark} style={{ left: `${node.target}%` }} title={t('block.target', { value: node.target })} />
             )}
           </div>
         </div>
@@ -416,7 +417,7 @@ export function renderNode(
                 : <><div className={css.liTitle}>{renderInline(typeof item === 'string' ? item : item.title)}</div>{typeof item !== 'string' && item.desc !== undefined && <div className={css.liDesc}>{renderInline(item.desc)}</div>}</>}
             </div>
           ))}
-          {bound !== undefined && <span className={css.filterHint}>匹配 {items.length} / {all.length} 项</span>}
+          {bound !== undefined && <span className={css.filterHint}>{t('block.filterMatch', { shown: items.length, total: all.length })}</span>}
         </div>
       )
     }

@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### 新增
+- **界面语言（i18n）**：浏览器侧全部用户可见文案改由 `en` / `zh` 两套词典驱动（`src/client/i18n/`），不再硬编码。语言解析顺序为「宿主语言偏好 → 浏览器 `navigator.languages` → 英文」；英文同时作为**逐键兜底**，因此词典缺键只会回退、绝不会把界面渲染成空白。
+- **跟随 DSH 语言设置**：宿主提供 `@deepseek-ai/dsh-client-locale` 时，插件把两套词典注册到 `genui` 命名空间，并镜像宿主的当前语言（含后续切换）。该服务以**可选方式**读取、不写进 `inject`，所以不带该服务的宿主照常渲染（自动降级为浏览器探测）。
+- 语言切换在已挂载的界面上**原地生效**：面板、模板中心、成就页与组件 chrome 通过 `useSyncExternalStore` 订阅语言修订号，无需刷新。
+
+### 变更
+- `DEFAULT_PANEL_SPEC` → `defaultPanelSpec()`，`GENUI_TEMPLATES` → `genuiTemplates()`：内容含可翻译文案，改为**按调用构建**，避免被模块加载时刻的语言固化。
+- 模板分类改用稳定 id（`dashboard`/`data`/`flow`/`chart`/`interactive`/`quiz`/`advanced`），显示名走词典；成就仅持久化 id，名称与描述在读取时解析——切换语言不会丢失已解锁记录。
+- 围栏诊断（`describeFenceFailure`，两条通道共用）同样走词典，跟随当前语言。
+- 面向**模型**的文案（`[genui-action]` 提示词、注入系统提示的围栏词汇表）刻意不进词典：它属于插件与模型之间的协议，翻译它会改变模型行为而非界面语言。
+
 ## [0.11.1-preview.2] - 2026-09-16
 
 ### 新增

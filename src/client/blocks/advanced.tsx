@@ -11,7 +11,8 @@ import css from '../GenuiBlock.module.css'
 import { GENUI_LIMITS } from '../genui-runtime/index.ts'
 import { PlotBlock } from '../PlotBlock.tsx'
 import { renderNode } from './render-node.tsx'
-import { CODE_BLOCK_LABELS, DIFF_BLOCK_LABELS, JSON_TREE_LABELS } from '../primitive-labels.ts'
+import { codeBlockLabels, diffBlockLabels, jsonTreeLabels } from '../primitive-labels.ts'
+import { useT } from '../i18n/index.ts'
 import type { AnswersState, GenuiBlockProps } from './state.ts'
 import type {
   GenuiAccordion, GenuiBreadcrumb, GenuiCallout, GenuiCode, GenuiCopy, GenuiDiff, GenuiFileTree, GenuiFileTreeNode,
@@ -91,21 +92,24 @@ export const PlotNode = memo(function PlotNode({ plot }: { plot: GenuiPlot }) {
 
 /** Diff: 收编 dsh DiffBlock (same path/oldText/newText shape as DiffHunk). */
 export const DiffNode = memo(function DiffNode({ node }: { node: GenuiDiff }) {
-  return <DiffBlock diffs={node.diffs} labels={DIFF_BLOCK_LABELS} />
+  useT()
+  return <DiffBlock diffs={node.diffs} labels={diffBlockLabels()} />
 })
 
 /** Json: 收编 dsh JsonTree. */
 export const JsonNode = memo(function JsonNode({ node }: { node: GenuiJson }) {
+  useT()
   const data = node.value
   if (typeof data !== 'object' || data === null) {
     return <div className={css.jsonScalar}>{String(data)}</div>
   }
-  return <JsonTree data={data as object | unknown[]} label="JSON" labels={JSON_TREE_LABELS} copyable />
+  return <JsonTree data={data as object | unknown[]} label="JSON" labels={jsonTreeLabels()} copyable />
 })
 
 /** Code: 收编 dsh CodeBlock with explicit language. */
 export const CodeNode = memo(function CodeNode({ node }: { node: GenuiCode }) {
-  return <CodeBlock {...CODE_BLOCK_LABELS} code={node.code.slice(0, GENUI_LIMITS.maxCode)} lang={node.lang} />
+  useT()
+  return <CodeBlock {...codeBlockLabels()} code={node.code.slice(0, GENUI_LIMITS.maxCode)} lang={node.lang} />
 })
 
 /**
@@ -249,6 +253,7 @@ async function writeCopyText(text: string): Promise<boolean> {
  * (not inside the button) — button content is atomic to screen readers, so a
  * live region inside it would never announce. */
 export const CopyNode = memo(function CopyNode({ node }: { node: GenuiCopy }) {
+  const t = useT()
   const [copied, setCopied] = useState(false)
   return (
     <>
@@ -264,9 +269,9 @@ export const CopyNode = memo(function CopyNode({ node }: { node: GenuiCopy }) {
           })
         }}
       >
-        {copied ? '✓ 已复制' : renderInline(node.label ?? '复制', false)}
+        {copied ? t('label.copiedShort') : renderInline(node.label ?? t('label.copy'), false)}
       </button>
-      <span className={css.visuallyHidden} role="status">{copied ? '已复制到剪贴板' : ''}</span>
+      <span className={css.visuallyHidden} role="status">{copied ? t('label.copiedToClipboard') : ''}</span>
     </>
   )
 })
@@ -278,6 +283,7 @@ type MermaidRenderState =
 
 /** Mermaid: lazily loaded diagram renderer. */
 export const MermaidNode = memo(function MermaidNode({ node }: { node: GenuiMermaid }) {
+  const t = useT()
   const [state, setState] = useState<MermaidRenderState>({ status: 'loading' })
   const code = node.code.slice(0, GENUI_LIMITS.maxMermaid)
   useEffect(() => {
@@ -294,13 +300,14 @@ export const MermaidNode = memo(function MermaidNode({ node }: { node: GenuiMerm
     })()
     return () => { alive = false }
   }, [code])
-  if (state.status === 'error') return <div className={css.mermaidFallback}><pre>{code}</pre><div className={css.mermaidErr}>图语法有误，已降级显示源码</div></div>
-  if (state.status === 'loading') return <div className={css.mermaidFallback}><pre>{code}</pre><div className={css.mermaidHint}>渲染中…</div></div>
+  if (state.status === 'error') return <div className={css.mermaidFallback}><pre>{code}</pre><div className={css.mermaidErr}>{t('block.mermaidError')}</div></div>
+  if (state.status === 'loading') return <div className={css.mermaidFallback}><pre>{code}</pre><div className={css.mermaidHint}>{t('block.mermaidLoading')}</div></div>
   return <div className={css.mermaid} dangerouslySetInnerHTML={{ __html: state.html }} data-genui-mermaid />
 })
 
 /** Scene3D: three.js WebGL canvas, lazily imported. */
 export const Scene3DNode = memo(function Scene3DNode({ node }: { node: GenuiScene3D }) {
+  const t = useT()
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const ref = useRef<HTMLDivElement | null>(null)
   // Mesh cap mirrored from the guard: a pathological scene never reaches
@@ -324,8 +331,8 @@ export const Scene3DNode = memo(function Scene3DNode({ node }: { node: GenuiScen
     <div className={css.scene3dWrap} data-genui-scene3d>
       {node.title !== undefined && <div className={css.scene3dTitle}>{renderInline(node.title)}</div>}
       <div ref={ref} className={css.scene3dCanvas} />
-      {status === 'loading' && <div className={css.scene3dHint}>加载 3D 场景…</div>}
-      {status === 'error' && <div className={css.scene3dHint}>3D 渲染失败</div>}
+      {status === 'loading' && <div className={css.scene3dHint}>{t('block.scene3dLoading')}</div>}
+      {status === 'error' && <div className={css.scene3dHint}>{t('block.scene3dError')}</div>}
     </div>
   )
 })
@@ -437,6 +444,7 @@ export const QuizNode = memo(function QuizNode({ node, onAction }: {
   node: GenuiQuiz
   onAction?: GenuiBlockProps['onAction']
 }) {
+  const t = useT()
   const [selected, setSelected] = useState<number | null>(null)
   const options = node.options.slice(0, GENUI_LIMITS.maxQuizOptions)
   const answered = selected !== null
@@ -485,11 +493,11 @@ export const QuizNode = memo(function QuizNode({ node, onAction }: {
       {answered && (
         <div className={css.quizResult} aria-live="polite">
           <div className={correct ? css.quizCorrectMsg : css.quizWrongMsg}>
-            {correct ? '✓ 回答正确！' : '✗ 再想想看'}
+            {correct ? t('block.quizCorrect') : t('block.quizWrong')}
             {chosen?.feedback !== undefined && <div className={css.quizFeedback}>{renderInline(chosen.feedback)}</div>}
           </div>
           {node.explanation !== undefined && <div className={css.quizExplanation}>{renderInline(node.explanation)}</div>}
-          <button type="button" className={css.quizRetry} onClick={() => setSelected(null)}>重新作答</button>
+          <button type="button" className={css.quizRetry} onClick={() => setSelected(null)}>{t('block.quizRetry')}</button>
         </div>
       )}
     </div>
