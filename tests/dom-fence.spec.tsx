@@ -91,6 +91,33 @@ afterEach(() => {
 })
 
 describe('installDomFenceRenderer', () => {
+  it('previews only explicitly labelled settled SVG and restores it on dispose', async () => {
+    const raw = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50"><rect width="50" height="20"/></svg>'
+    const row = assistantRow('svg-row', true)
+    const block = stockCodeBlock(raw, 'svg')
+    const other = stockCodeBlock(raw, 'xml')
+    row.append(block, other)
+    document.body.appendChild(row)
+    const send = vi.fn()
+    const dispose = installDomFenceRenderer(makeCtx('svg-session', send), send)
+    try {
+      await tick()
+      expect(block.style.display).not.toBe('none')
+      expect(row.querySelector('[data-genui-svg-fence]')).toBeNull()
+      row.removeAttribute('data-streaming')
+      expect(await waitFor(() => row.querySelector('[data-genui-svg-fence] img') !== null)).toBe(true)
+      expect(other.style.display).not.toBe('none')
+      const source = [...row.querySelectorAll('button')].find(button => button.textContent === '源码')!
+      fireEvent.click(source)
+      await tick(100)
+      expect(row.querySelectorAll('[data-genui-svg-fence]')).toHaveLength(1)
+      expect(row.querySelector('[data-genui-svg-fence] pre')?.textContent).toContain(raw)
+      expect(send).not.toHaveBeenCalled()
+    } finally { dispose() }
+    expect(block.style.display).not.toBe('none')
+    expect(row.querySelector('[data-genui-svg-fence]')).toBeNull()
+  })
+
   it('declares its cordis service injects (boot sweep depends on it)', () => {
     // 回归钉：曾丢失 inject 导出 → 宿主 fiber inject waiting 失效 →
     // apply 早于 slots 服务运行 → 整页 "Failed to load plugins"。

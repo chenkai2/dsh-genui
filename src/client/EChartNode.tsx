@@ -105,6 +105,19 @@ function presetOption(node: GenuiEChart, el?: HTMLElement | null): Record<string
   }
 
   switch (node.preset) {
+    case 'wordCloud': {
+      return {
+        ...base,
+        series: [{
+          type: 'wordCloud',
+          sizeRange: [16, 64],
+          rotationRange: [0, 0],
+          gridSize: 8,
+          textStyle: { fontFamily: 'sans-serif' },
+          data: data.map((d, i) => ({ name: d.label, value: d.value, textStyle: { color: colors[i % colors.length] } })),
+        }],
+      }
+    }
     case 'pie': {
       return {
         ...base,

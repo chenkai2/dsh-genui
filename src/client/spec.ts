@@ -57,6 +57,7 @@ export type GenuiNode = (
   | GenuiAccordion
   | GenuiCopy
   | GenuiMermaid
+  | GenuiSvg
   | GenuiScene3D
   | GenuiTimeline
   | GenuiFileTree
@@ -559,6 +560,14 @@ export interface GenuiCopy {
 
 /* ---------------- v1.3: advanced ---------------- */
 
+export interface GenuiSvg {
+  type: 'svg'
+  /** Standalone SVG document, displayed in an isolated image context. */
+  code: string
+  title?: string
+  height?: number
+}
+
 /** Mermaid diagram: flowchart/sequence/class/gantt source rendered lazily. */
 export interface GenuiMermaid {
   type: 'mermaid'
@@ -761,7 +770,7 @@ export interface GenuiDiagram {
  * a full ECharts option. Each maps to a themed option template. */
 export type EChartPreset =
   | 'bar' | 'line' | 'area' | 'pie' | 'scatter'
-  | 'radar' | 'gauge' | 'funnel' | 'treemap' | 'sankey' | 'graph' | 'heatmap' | 'bigline'
+  | 'radar' | 'gauge' | 'funnel' | 'treemap' | 'sankey' | 'graph' | 'heatmap' | 'bigline' | 'wordCloud'
 
 /** ECharts node: renders a full ECharts chart. Two modes:
  *

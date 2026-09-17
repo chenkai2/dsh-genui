@@ -77,7 +77,7 @@ export const DIAGRAM_EDGE_KINDS = ['solid', 'dashed', 'accent', 'link'] as const
 export const DIAGRAM_ROUTES = ['auto', 'orthogonal', 'straight'] as const
 export const ECHART_PRESETS = [
   'bar', 'line', 'area', 'pie', 'scatter',
-  'radar', 'gauge', 'funnel', 'treemap', 'sankey', 'graph', 'heatmap', 'bigline',
+  'radar', 'gauge', 'funnel', 'treemap', 'sankey', 'graph', 'heatmap', 'bigline', 'wordCloud',
 ] as const
 /** Oversized single-number stat (one per fence as the visual anchor). */
 export const STAT_SIZES = ['hero'] as const
@@ -296,6 +296,7 @@ export const COMPONENT_SCHEMAS: Readonly<Record<string, ComponentSchema>> = {
   link: schema(['label'], { ...nodeFields, label: 'string', href: 'string' }),
   list: schema(['items'], { ...nodeFields, items: 'array', filter: 'string' }),
   mermaid: schema(['code'], { ...nodeFields, code: 'string' }),
+  svg: schema(['code'], { ...nodeFields, code: 'string', title: 'string', height: 'number' }),
   plot: schema(['series'], { ...nodeFields, series: 'array', xMin: 'number', xMax: 'number', yMin: 'number', yMax: 'number', title: 'string' }, {}, { nested: { series: plotSeriesSchema } }),
   progress: schema(['value'], { ...nodeFields, value: 'number', label: 'string', valueLabel: 'string', variant: 'string', target: 'number' }, {}, { enums: { variant: PROGRESS_VARIANTS } }),
   // `items` joins the §175 aliases: it is the field name models reach for when
