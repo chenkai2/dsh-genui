@@ -8,6 +8,15 @@ import { GENUI_LIMITS } from '../src/client/genui-runtime/index.ts'
 const echart = (props: Record<string, unknown> = {}) => ({ type: 'echart', ...props })
 
 describe('repairGenuiSpec: echart preset whitelist', () => {
+  it('preserves wordCloud in both preset and full option modes', () => {
+    const spec = repairGenuiSpec({ items: [
+      echart({ preset: 'wordCloud', data: [{ label: '系统', value: 80 }] }),
+      echart({ option: { series: [{ type: 'wordCloud', data: [{ name: '系统', value: 80 }] }] } }),
+    ] })!
+    expect(spec.items[0]).toMatchObject({ preset: 'wordCloud', data: [{ label: '系统', value: 80 }] })
+    expect(spec.items[1]).toMatchObject({ option: { series: [{ type: 'wordCloud', data: [{ name: '系统', value: 80 }] }] } })
+  })
+
   it('accepts all five valid presets', () => {
     for (const preset of ['bar', 'line', 'area', 'pie', 'scatter'] as const) {
       const spec = repairGenuiSpec({ items: [echart({ preset, data: [{ label: 'a', value: 1 }] })] })

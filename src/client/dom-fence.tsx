@@ -55,6 +55,7 @@ import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { GenuiActionContext, type GenuiActionHandler } from './action-context.ts'
 import css from './GenuiBlock.module.css'
+import { renderSvgFence } from './svg-fence.tsx'
 import { describeFenceFailure, FenceDiagnostic, renderResolvedFenceNode, type GenuiFenceContext } from './fence-render.tsx'
 
 /** Fence surfaces the channel can take over, newest host first: the shared
@@ -143,6 +144,7 @@ interface Mount {
   block: HTMLElement
   lastRaw: string
   lastSettled: boolean
+  language: 'dsh-ui' | 'svg'
   lastNode: ReactNode
   /** True while this mount is the streaming skeleton (no component yet). */
   skeleton: boolean
@@ -161,11 +163,12 @@ function isTextNode(node: Node): node is Text {
  * must not self-identify through a nested block's label either (issue #13:
  * the shared markdown root was mistaken for a dsh-ui fence and hid the whole
  * message, losing every other code block). */
-function infostringOf(block: Element): string | null {
+function infostringOf(block: Element): 'dsh-ui' | 'svg' | null {
   const pre = block.querySelector('pre')
   for (const el of block.querySelectorAll('*')) {
     if (el.childElementCount !== 0) continue
-    if (el.textContent?.trim() !== 'dsh-ui') continue
+    const lang = el.textContent?.trim()
+    if (lang !== 'dsh-ui' && lang !== 'svg') continue
     if (pre !== null && pre.contains(el)) continue
     // A leaf label that belongs to a NESTED known code surface is that
     // surface's banner, not `block`'s own banner. Only accept labels whose
@@ -173,7 +176,7 @@ function infostringOf(block: Element): string | null {
     // stay supported by the structural backstop).
     const owner = el.closest(CODE_BLOCK_SELECTORS)
     if (owner !== null && owner !== block) continue
-    return 'dsh-ui'
+    return lang
   }
   return null
 }
@@ -217,7 +220,7 @@ function isSettled(block: Element): boolean {
 function surfaceOf(pre: HTMLElement, scope: ParentNode = document): HTMLElement | null {
   let el: HTMLElement | null = pre.parentElement
   for (let hops = 0; el !== null && el !== scope && hops < SURFACE_HOPS; hops += 1, el = el.parentElement) {
-    if (infostringOf(el) !== 'dsh-ui') continue
+    if (infostringOf(el) === null) continue
     if (!isPlausibleFenceSurface(el)) return null
     return el
   }
@@ -250,6 +253,7 @@ function findFenceCandidates(scope: ParentNode = document): HTMLElement[] {
     // child of `code-block`): only the outermost matching element is a
     // candidate, so a fence is never double-counted or taken over twice.
     if (el.parentElement !== null && el.parentElement.closest(CODE_BLOCK_SELECTORS) !== null) continue
+    if (el.closest(`.${CONTAINER_CLASS}, .${DIAGNOSTIC_CLASS}, [data-genui-svg-fence]`) !== null) continue
     if (seen.has(el)) continue
     // Message-level containers that happen to carry a surface class must
     // not be taken over: hiding them hides the whole answer (issue #19).
@@ -267,7 +271,7 @@ function findFenceCandidates(scope: ParentNode = document): HTMLElement[] {
     // markdown root holding both a dsh-ui fence and a python block — and
     // the backstop would mislabel that whole container as a fence, hiding
     // every other code block with it (issue #13).
-    if (pre.closest(CODE_BLOCK_SELECTORS) !== null) continue
+    if (pre.closest(`${CODE_BLOCK_SELECTORS}, .${CONTAINER_CLASS}, .${DIAGNOSTIC_CLASS}, [data-genui-svg-fence]`) !== null) continue
     const surface = surfaceOf(pre, scope)
     if (surface === null) {
       // Diagnose the issue #19 guard: a labeled ancestor that is NOT a code
@@ -346,7 +350,7 @@ function fenceIndexOf(row: Element, block: Element): number {
   let index = 0
   for (const candidate of findFenceCandidates(scope)) {
     if (candidate.closest(STREAMING) !== null) continue
-    if (infostringOf(candidate) === null) continue
+    if (infostringOf(candidate) !== 'dsh-ui') continue
     index += 1
     if (candidate === block) return index
   }
@@ -538,14 +542,16 @@ export function installDomFenceRenderer(
     // streaming the fence is identified by CONTENT — a partial parse that
     // yields a GenUI node. A misidentified fence (e.g. a ```json block that
     // happens to parse) is reverted at the settle transition below.
-    if (settled && infostringOf(block) === null) return
+    const language = infostringOf(block)
+    if (settled && language === null) return
+    if (!settled && language === 'svg') return
     const raw = rawOf(block)
     if (raw.trim() === '') {
-      if (settled) warnOnce(block, 'settled dsh-ui fence has an empty body; keeping the code block')
+      if (settled) warnOnce(block, `settled ${language ?? 'dsh-ui'} fence has an empty body; keeping the code block`)
       return
     }
     const { key, context } = contextOf(row, block, settled)
-    const node: ReactNode | null = renderResolvedFenceNode(raw, key, context)
+    const node: ReactNode | null = language === 'svg' ? renderSvgFence(raw, key) : renderResolvedFenceNode(raw, key, context)
     // Null = no finished component yet (streaming half) or unrepairable: the
     // stock code block stays visible. A settled unrepairable body also gets a
     // VISIBLE diagnostic — console-only reporting left the defect invisible
@@ -598,7 +604,7 @@ export function installDomFenceRenderer(
     }
     block.style.display = 'none'
     block.setAttribute(PROCESSED, '')
-    mounts.set(block, { root, container, block, lastRaw: raw, lastSettled: settled, lastNode: payload, skeleton: node === null })
+    mounts.set(block, { root, container, block, lastRaw: raw, lastSettled: settled, language: language ?? 'dsh-ui', lastNode: payload, skeleton: node === null })
   }
 
   /** Pre-paint repair: the host's React re-renders during streaming can wipe
@@ -664,6 +670,10 @@ export function installDomFenceRenderer(
       }
       const raw = rawOf(block)
       const settled = isSettled(block)
+      if (mount.language === 'svg' && (!settled || infostringOf(block) !== 'svg')) {
+        unmountBlock(block)
+        continue
+      }
       // Settle transition label re-verification: a streaming block was taken
       // over by content, not by label. If the now-visible label exists and is
       // NOT dsh-ui (a ```json fence that happened to parse), restore the
@@ -685,7 +695,7 @@ export function installDomFenceRenderer(
       if (mount.lastRaw !== raw || mount.lastSettled !== settled || contentWiped) {
         const anchor = rowOf(block)
         const { key, context } = contextOf(anchor, block, settled)
-        const node = renderResolvedFenceNode(raw, key, context)
+        const node = mount.language === 'svg' ? renderSvgFence(raw, key) : renderResolvedFenceNode(raw, key, context)
         if (node === null) {
           if (mount.skeleton && !settled) {
             // Still streaming and still incomplete: keep the skeleton mounted

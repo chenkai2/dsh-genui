@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### 新增
+- **ECharts 词云**：`echart` 节点新增 `preset: "wordCloud"`，`data:[{label,value}]` 的 value 即权重，颜色按序循环 `palette`（缺省跟随主题调色板）；`option` 模式同步注册 `echarts-wordcloud` 扩展，`series[].type: "wordCloud"` 直接可用。完整版引擎新增约 30 KB（#183）。
+- **SVG 图形组件**：`{"type":"svg","code":"<svg …/>"}`（`title`/`height` 可选）以隔离图片模式渲染模型输出的独立 SVG——脚本注入、宿主样式污染在结构上被排除；解析失败或加载失败时保留源码并显示提示（#183）。
+- **裸 `svg` 围栏自动预览**：模型直接输出 ` ```svg ` 代码围栏（不带 `dsh-ui` 包装）时，落定后自动显示为图形预览，带「预览/源码」切换，源码可复制；流式生成中保持原样，不闪错误；仅接管语言标签明确为 `svg` 的围栏，其他语言代码块不受影响。registry 与 DOM 两条渲染通道均已接入（#183）。
+
 ### 修复
 - **离散交互不再被防抖合并**：`button` / `checkbox` / `radio` / `switch` / `select` / `input` / `textarea` / `submit` / `quiz` 等一次手势一次事件的交互**立即逐次回传**。此前 300ms 防抖以 action 名为 key，快速连点同 action 名的控件会静默丢弃前几次事件，模型收到残缺交互状态，与 SKILL.md 承诺的 checkbox「默认保持逐次 action 行为」矛盾（#178）。
 - `slider` 拖拽保留防抖合并，且 key 从「action 名」改为「action 名 + `id`」：同一滑块的连续拖动仍合并成最后一次的值，多个共享 action 名的滑块互不挤占（#178）。

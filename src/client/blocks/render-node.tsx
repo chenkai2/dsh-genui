@@ -24,6 +24,7 @@ import {
 } from './advanced.tsx'
 import { DiagramNode } from './diagram/index.tsx'
 import { ImageNode } from './image.tsx'
+import { SvgNode } from './svg.tsx'
 
 import { EChartNode } from '../EChartNode.tsx'
 
@@ -459,6 +460,7 @@ export function renderNode(
     case 'accordion': return <AccordionNode key={key} node={node} onAction={onAction} depth={depth + 1} answers={answers} />
     case 'copy': return <CopyNode key={key} node={node} />
     case 'mermaid': return <MermaidNode key={key} node={node} />
+    case 'svg': return <SvgNode key={key} node={node} />
     case 'scene3d': return <Scene3DNode key={key} node={node} />
     case 'timeline': return <TimelineNode key={key} node={node} />
     case 'file-tree': return <FileTreeNode key={key} node={node} />

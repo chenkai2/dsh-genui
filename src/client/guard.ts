@@ -626,6 +626,11 @@ function repairNodeFields(value: unknown, ctx: RepairCtx, depth: number): GenuiN
       if (text === undefined) return null
       return { type: 'copy', text, ...opt('label', str(v.label, 128)) }
     }
+    case 'svg': {
+      const code = str(v.code, GENUI_LIMITS.maxCode)
+      if (code === undefined) return null
+      return { type: 'svg', code, ...opt('title', str(v.title, GENUI_LIMITS.maxString)), ...opt('height', int(v.height, 100, 800)) }
+    }
     case 'mermaid': {
       const code = str(v.code, GENUI_LIMITS.maxMermaid)
       if (code === undefined) return null
@@ -1872,6 +1877,10 @@ function validateNode(value: unknown, depth: number, at: string, errors: string[
       break
     case 'copy':
       if (typeof v.text !== 'string') errors.push(`${at}: type 'copy' requires text (string)`)
+      break
+    case 'svg':
+      if (typeof v.code !== 'string') errors.push(`${at}: type 'svg' requires code (string)`)
+      isNum('height')
       break
     case 'mermaid':
       if (typeof v.code !== 'string') errors.push(`${at}: type 'mermaid' requires code (string)`)

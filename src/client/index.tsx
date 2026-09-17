@@ -30,6 +30,7 @@ import type { Key, ReactNode } from 'react'
 import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { installDomFenceRenderer } from './dom-fence.tsx'
 import { renderGenuiFence, type GenuiFenceContext } from './fence-render.tsx'
+import { renderSvgFence } from './svg-fence.tsx'
 import { createPanelSlashSource } from './panel-command.ts'
 import { GenuiPanel, type GenuiPanelInjected } from './panel.tsx'
 import { GenuiToolView } from './toolview.tsx'
@@ -153,7 +154,7 @@ export function apply(ctx: Context): () => void {
   const channel = useRegistry ? 'registry' : 'dom'
   console.info(`[genui] client active; fence-channel=${channel}`)
   const disposers: Array<() => void> = useRegistry
-    ? [localeDispose, registerFn!('dsh-ui', renderGenuiFence)]
+    ? [localeDispose, registerFn!('dsh-ui', renderGenuiFence), registerFn!('svg', renderSvgFence)]
     : [localeDispose, installDomFenceRenderer(ctx, (sessionId, action, payload) => sendInlineGenuiAction(ctx, sessionId, action, payload))]
   // Idle prefetch of the lazy engine assets: the browser downloads them at
   // LOW priority whenever the page is idle, so the first mermaid/3D node in
