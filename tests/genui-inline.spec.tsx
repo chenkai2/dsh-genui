@@ -4,6 +4,7 @@
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { renderInline } from '../src/client/inline.ts'
+import { GenuiBlock } from '../src/client/GenuiBlock.tsx'
 
 afterEach(cleanup)
 
@@ -32,6 +33,46 @@ describe('inline markup', () => {
     const { container } = render(<span>{renderInline('**$$x +\ny$$**')}</span>)
     expect(container.querySelector('strong .katex-display')).not.toBeNull()
     expect(container.textContent).not.toContain('**')
+  })
+
+  it('renders a real newline as a <br> line break', () => {
+    const out = html('第一行\n第二行')
+    expect(out).toContain('<br')
+    expect(out).not.toContain('\n')
+  })
+
+  it('renders CRLF as a single <br> and mixes with emphasis', () => {
+    const out = html('**重点**\r\n说明')
+    expect(out).toContain('<strong')
+    expect(out.match(/<br/g)).toHaveLength(1)
+  })
+
+  it('breaks the line inside emphasis content too', () => {
+    const out = html('**第一行\n第二行**')
+    expect(out).toContain('<strong')
+    expect(out).toContain('<br')
+  })
+
+  it('keeps a newline out of code spans (code stays single-line)', () => {
+    const out = html('`a\nb`')
+    // The newline ENDS the code-span attempt (no closing backtick before it);
+    // it becomes a <br> and the backticks stay literal.
+    expect(out).not.toContain('<code')
+    expect(out).toContain('<br')
+  })
+
+  it('expresses a line break inside a callout through the block path (#177)', () => {
+    render(<GenuiBlock spec={{
+      title: '换行',
+      items: [
+        { type: 'callout', tone: 'info', title: '两段', content: '第一行\n第二行' },
+        { type: 'text', content: '甲\n乙' },
+      ],
+    }} />)
+    const brs = document.querySelectorAll('br')
+    expect(brs.length).toBeGreaterThanOrEqual(2)
+    expect(document.body.textContent).toContain('第一行')
+    expect(document.body.textContent).toContain('第二行')
   })
 
   it('updates a formula without leaving stale math or damaging surrounding text', () => {
