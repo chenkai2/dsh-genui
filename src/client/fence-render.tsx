@@ -21,7 +21,7 @@ import { codeBlockLabels } from './primitive-labels.ts'
 import { t, useT } from './i18n/index.ts'
 import { ErrorBoundary } from './ErrorBoundary.tsx'
 import { GenuiBlock } from './GenuiBlock.tsx'
-import { isRenderableProcess, processGenuiSpec } from './guard.ts'
+import { isRenderableProcess, partialRepairGenuiSpec, processGenuiSpec } from './guard.ts'
 import { fenceStateKey } from './interaction-store.ts'
 import { parsePartialGenuiSpec } from './parse-partial.ts'
 import { applyPanelOperation, diagnosePanelBudget, type PanelOperationStatus } from './panel-store.ts'
@@ -172,11 +172,12 @@ function FencePanelPublisher({ sessionId, sourceId, order, spec }: {
   return null
 }
 
-/** Process one parsed value and return its canonical repaired spec only when the shared pipeline is error-free. */
+/** Process one parsed value into a renderable spec: the strict pipeline, then
+ *  — when that refuses — a single partial retry that drops the erroring nodes
+ *  and renders what survives (issue #186: one bad node must not take the
+ *  whole fence back to a raw code block). */
 function repairRenderableSpec(value: unknown): GenuiSpec | null {
-  const processed = processGenuiSpec(value)
-  if (!isRenderableProcess(processed)) return null
-  return processed.spec
+  return partialRepairGenuiSpec(processGenuiSpec(value))
 }
 
 /**

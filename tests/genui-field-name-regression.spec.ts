@@ -37,8 +37,43 @@ describe('field-name regression corpus (real-session fences)', () => {
     expect(renders(raw)).toBe(true)
   })
 
-  it('renders the two real large fences end to end', () => {
-    // The MR17072 risk-inventory fence (api.shop.sc.weibo.com session): a
+  // Issue #186 corpus: high-frequency miswrites observed across ten degraded
+  // real-session fences (0.11.0 / DSH 0.1.5-rc.2). Each must now render
+  // outright — the aliases/normalization fix them before validation.
+  it.each([
+    ['table 用 items 装二维数组且缺 columns', '{"items":[{"type":"table","items":[["检查项","结果"],["/health","200 OK"],["首页未登录","302 → CAS"]]}]}'],
+    ['keyvalue 记录写成 {label,value}', '{"items":[{"type":"keyvalue","items":[{"label":"任务卡","value":"7/7"},{"label":"pytest","value":"327 passed"}]}]}'],
+    ['file-tree 用 nodes 且记录写成 {label,desc,children}', '{"items":[{"type":"file-tree","nodes":[{"label":"src","desc":"源码","children":[{"label":"main.py"}]},{"label":"README.md"}]}]}'],
+    ['callout tone 写 danger 且正文写成 desc', '{"items":[{"type":"callout","tone":"danger","desc":"镜像源待确认。"}]}'],
+    ['根级直接发组件数组', '[{"type":"stat","label":"通过","value":"327"},{"type":"callout","content":"全部通过。"}]'],
+  ])('renders an issue #186 miswrite outright: %s', (_label, raw) => {
+    expect(renders(raw)).toBe(true)
+  })
+
+  it('unwraps a double-encoded fence body (issue #186 case 8)', () => {
+    const inner = JSON.stringify({ items: [{ type: 'stat', label: '通过', value: '327' }] })
+    // The whole spec arrived as a JSON string (literal \" in the fence body).
+    expect(renders(JSON.stringify(inner))).toBe(true)
+    const parsed = parsePartialGenuiSpec(JSON.stringify(inner))
+    expect(parsed).not.toBeNull()
+    expect(processGenuiSpec(parsed).repaired?.items).toEqual([{ type: 'stat', label: '通过', value: '327' }])
+  })
+
+  it('repairs the issue #186 shapes into canonical trees', () => {
+    const processed = processGenuiSpec(JSON.parse('{"items":[{"type":"file-tree","nodes":[{"label":"src","children":[{"label":"main.py"}]}]}]}'))
+    // label→name at every depth, `type:dir` defaulted for parents, stray
+    // record fields (desc) dropped silently by repair.
+    expect(processed.repaired?.items[0]).toEqual({
+      type: 'file-tree',
+      items: [{ name: 'src', type: 'dir', children: [{ name: 'main.py' }] }],
+    })
+    const callout = processGenuiSpec(JSON.parse('{"items":[{"type":"callout","tone":"danger","desc":"x"}]}'))
+    expect(callout.repaired?.items[0]).toEqual({ type: 'callout', content: 'x', tone: 'error' })
+    const table = processGenuiSpec(JSON.parse('{"items":[{"type":"table","items":[["检查项","结果"],["/health","200"]]}]}'))
+    expect(table.repaired?.items[0]).toEqual({ type: 'table', columns: ['检查项', '结果'], rows: [['/health', '200']] })
+  })
+
+  it('renders the two real large fences end to end', () => {    // The MR17072 risk-inventory fence (api.shop.sc.weibo.com session): a
     // callout + 8-row table + list, previously degraded to one code block.
     const riskInventory = JSON.stringify({
       title: 'MR !7072 代码评审 · 潜在风险清单',

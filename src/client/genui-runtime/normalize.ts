@@ -1,5 +1,6 @@
 /** Deterministic GenUI alias and structural normalization. */
 import { COMPONENT_SCHEMAS } from './schema.ts'
+import type { ComponentRecordSchema } from './schema.ts'
 import { isComponentRoot } from '../spec.ts'
 import type { GenuiDiagnostic } from './diagnostics.ts'
 
@@ -69,6 +70,75 @@ function normalizeAliasFields(value: Record<string, unknown>, path: string, type
       canonical,
     })
   }
+  for (const [field, values] of Object.entries(definition.valueAliases)) {
+    const written = out[field]
+    if (typeof written !== 'string') continue
+    const canonical = values[written]
+    if (canonical === undefined || canonical === written) continue
+    out[field] = canonical
+    warnings.push({
+      kind: 'alias',
+      path: `${path}.${field}`,
+      message: `${path}.${field} '${written}' normalized to '${canonical}'`,
+      type,
+      field,
+      canonical,
+    })
+  }
+  return out
+}
+
+/**
+ * Apply a nested record schema's field aliases to a record tree: every entry
+ * of an array (and every nested record collection below it) is rewritten in
+ * place-equivalent copies, so validation, repair, and diagnostics all see the
+ * canonical record fields (`keyvalue.pairs[].label → key`,
+ * `file-tree.items[].label → name`, issue #186).
+ */
+function normalizeRecordTree(
+  value: unknown,
+  definition: ComponentRecordSchema,
+  at: string,
+  type: string,
+  warnings: GenuiDiagnostic[],
+): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry, index) => normalizeRecordTree(entry, definition, `${at}[${index}]`, type, warnings))
+  }
+  const holder = record(value)
+  if (holder === undefined) return value
+  const out = { ...holder }
+  for (const [alias, canonical] of Object.entries(definition.aliases)) {
+    if (!(alias in out) || canonical in out) continue
+    out[canonical] = out[alias]
+    delete out[alias]
+    warnings.push({
+      kind: 'alias',
+      path: `${at}.${alias}`,
+      message: `${at}.${alias} normalized/adopted as '${canonical}'`,
+      type,
+      field: alias,
+      canonical,
+    })
+  }
+  for (const [field, nested] of Object.entries(definition.nested)) {
+    if (out[field] !== undefined) out[field] = normalizeRecordTree(out[field], nested, `${at}.${field}`, type, warnings)
+  }
+  return out
+}
+
+/**
+ * file-tree parents without a `type`: a record that carries `children` is a
+ * directory in every model-written tree, and the renderer's collapse
+ * affordance depends on the marker (issue #186).
+ */
+function defaultFileTreeDirectories(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(defaultFileTreeDirectories)
+  const holder = record(value)
+  if (holder === undefined) return value
+  const out = { ...holder }
+  if (out.type === undefined && Array.isArray(out.children)) out.type = 'dir'
+  if (out.children !== undefined) out.children = defaultFileTreeDirectories(out.children)
   return out
 }
 
@@ -79,10 +149,19 @@ function normalizeNode(value: unknown, path: string, warnings: GenuiDiagnostic[]
   // Custom nodes are opaque by contract: don't inspect or rewrite their data.
   if (definition === undefined) return value
   const out = normalizeAliasFields(value, path, type, warnings)
+  // Nested data records (keyvalue pairs, file-tree items, …) carry their own
+  // field aliases — apply them before validation/repair see the records.
+  for (const [field, nested] of Object.entries(definition.nested)) {
+    if (out[field] !== undefined) out[field] = normalizeRecordTree(out[field], nested, `${path}.${field}`, type, warnings)
+  }
   const normalizeNodeValue = (child: unknown, childPath: string): unknown => normalizeNode(child, childPath, warnings)
   const normalizeNodeArray = (children: unknown, childPath: string): unknown => Array.isArray(children)
     ? children.map((child, index) => normalizeNodeValue(child, `${childPath}[${index}]`))
     : children
+
+  if (type === 'file-tree' && out.items !== undefined) {
+    out.items = defaultFileTreeDirectories(out.items)
+  }
 
   if (type === 'stat' && Array.isArray(out.items) && out.label === undefined && out.value === undefined) {
     // Model-side generalization: one `stat` carrying a metric list
@@ -186,6 +265,35 @@ function normalizeNode(value: unknown, path: string, warnings: GenuiDiagnostic[]
  */
 export function normalizeGenuiSpec(value: unknown): { value: unknown; warnings: GenuiDiagnostic[] } {
   const warnings: GenuiDiagnostic[] = []
+  if (typeof value === 'string') {
+    // Double-encoded body (issue #186): the model escaped the whole spec into
+    // a JSON string. Decode exactly once — anything deeper is quoted prose,
+    // not a spec, and stays unrenderable.
+    try {
+      const decoded: unknown = JSON.parse(value)
+      if (record(decoded) !== undefined || Array.isArray(decoded)) {
+        value = decoded
+        warnings.push({
+          kind: 'alias',
+          path: 'spec',
+          message: 'double-encoded JSON string unwrapped into a spec value',
+        })
+      }
+    } catch {
+      // Not JSON text: leave as-is; repair rejects the root as usual.
+    }
+  }
+  if (Array.isArray(value) && value.length > 0) {
+    // A root-level component list is the envelope minus its braces (issue
+    // #186): adopt it as `items` instead of rejecting the whole fence. An
+    // empty list has nothing to render and stays an invalid root.
+    value = { items: value }
+    warnings.push({
+      kind: 'alias',
+      path: 'items',
+      message: 'root array normalized into an items envelope',
+    })
+  }
   const root = record(value)
   if (root === undefined) return { value, warnings }
   const out = { ...root }

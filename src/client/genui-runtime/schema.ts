@@ -37,6 +37,8 @@ export interface ComponentRecordSchema {
   readonly fields: Readonly<Record<string, ComponentFieldKind>>
   readonly enums: Readonly<Record<string, readonly string[]>>
   readonly nested: Readonly<Record<string, ComponentRecordSchema>>
+  /** Field-name aliases applied to each record before validation/repair. */
+  readonly aliases: Readonly<Record<string, string>>
 }
 
 export interface ComponentSchema {
@@ -46,6 +48,8 @@ export interface ComponentSchema {
   /** Explicit optional field kinds; `fields` remains the complete field map. */
   readonly optional: Readonly<Record<string, ComponentFieldKind>>
   readonly aliases: Readonly<Record<string, string>>
+  /** Written enum values deterministically mapped to canonical ones (field → value → canonical). */
+  readonly valueAliases: Readonly<Record<string, Readonly<Record<string, string>>>>
   readonly oneOfRequired: readonly (readonly string[])[]
   readonly conditionalRequired: readonly ComponentConditionalRule[]
   readonly rules: readonly (ComponentOneOfRule | ComponentConditionalRule)[]
@@ -99,6 +103,7 @@ const schema = (
     conditionalRequired?: readonly ComponentConditionalRule[]
     nested?: Readonly<Record<string, ComponentRecordSchema>>
     enums?: Readonly<Record<string, readonly string[]>>
+    valueAliases?: Readonly<Record<string, Readonly<Record<string, string>>>>
     validator?: ComponentValidatorMetadata
   } = {},
 ): ComponentSchema => {
@@ -116,6 +121,7 @@ const schema = (
     fields,
     optional,
     aliases,
+    valueAliases: options.valueAliases ?? {},
     oneOfRequired,
     conditionalRequired,
     rules,
@@ -130,7 +136,8 @@ const recordSchema = (
   fields: Readonly<Record<string, ComponentFieldKind>>,
   nested: Readonly<Record<string, ComponentRecordSchema>> = {},
   enums: Readonly<Record<string, readonly string[]>> = {},
-): ComponentRecordSchema => ({ required, fields, enums, nested })
+  aliases: Readonly<Record<string, string>> = {},
+): ComponentRecordSchema => ({ required, fields, enums, nested, aliases })
 
 const nodeFields = { type: 'string', span: 'number' } as const
 
@@ -147,7 +154,9 @@ const chartSeriesSchema = recordSchema(['label', 'data'], {
 }, { data: chartDatumSchema })
 
 const stepsRecordSchema = recordSchema(['title'], { title: 'string', desc: 'string' })
-const keyValueRecordSchema = recordSchema(['key', 'value'], { key: 'string', value: 'string' })
+// `label` is what models write for the left-hand column (issue #186); the
+// record otherwise fails "requires key" and the whole keyvalue drops.
+const keyValueRecordSchema = recordSchema(['key', 'value'], { key: 'string', value: 'string' }, {}, {}, { label: 'key' })
 const timelineRecordSchema = recordSchema(['title'], { title: 'string', desc: 'string', time: 'string' })
 const diffRecordSchema = recordSchema(['path', 'newText'], { path: 'string', oldText: 'string-or-null', newText: 'string' })
 const plotParamSchema = recordSchema(['name', 'value'], {
@@ -161,9 +170,15 @@ const sceneMeshSchema = recordSchema(['shape'], {
 }, {}, { shape: MESH_SHAPES })
 
 function fileTreeRecordSchema(depth: number): ComponentRecordSchema {
-  return recordSchema(['name'], {
-    name: 'string', type: 'string', children: 'array',
-  }, depth > 0 ? { children: fileTreeRecordSchema(depth - 1) } : {}, { type: FILE_TYPES })
+  return recordSchema(
+    ['name'],
+    { name: 'string', type: 'string', children: 'array' },
+    depth > 0 ? { children: fileTreeRecordSchema(depth - 1) } : {},
+    { type: FILE_TYPES },
+    // Tree records read like outline items to models: they reach for `label`
+    // (and `desc`) instead of `name` (issue #186).
+    { label: 'name' },
+  )
 }
 
 const fileTreeNodeSchema = fileTreeRecordSchema(6)
@@ -245,10 +260,13 @@ export const COMPONENT_SCHEMAS: Readonly<Record<string, ComponentSchema>> = {
   badge: schema(['label'], { ...nodeFields, label: 'string', tone: 'string', icon: 'string' }, { text: 'label', value: 'label' }, { enums: { tone: BADGE_TONES } }),
   breadcrumb: schema(['items'], { ...nodeFields, items: 'array' }),
   button: schema(['label'], { ...nodeFields, label: 'string', tone: 'string', full: 'boolean', small: 'boolean', icon: 'string', action: 'string' }, {}, { enums: { tone: BUTTON_TONES } }),
-  // `text`/`body` are the model's default name for "the callout's prose": a
-  // callout missing `content` is dropped by repair, which takes the WHOLE
-  // fence down with it (issue: dsh-ui 围栏字段名). Adopt them as aliases.
-  callout: schema(['content'], { ...nodeFields, title: 'string', content: 'string', tone: 'string' }, { kind: 'tone', text: 'content', body: 'content' }, { enums: { tone: CALLOUT_TONES } }),
+  // `text`/`body`/`desc` are the model's default names for "the callout's
+  // prose": a callout missing `content` is dropped by repair, which takes the
+  // WHOLE fence down with it (issue: dsh-ui 围栏字段名). Adopt them as aliases.
+  // `tone` value aliases: card/hero/badge/button all accept `danger` (and
+  // badge uses `warn`), so models cross-write them onto callout — map them
+  // onto the closest canonical tone instead of failing the enum (issue #186).
+  callout: schema(['content'], { ...nodeFields, title: 'string', content: 'string', tone: 'string' }, { kind: 'tone', text: 'content', body: 'content', desc: 'content' }, { enums: { tone: CALLOUT_TONES }, valueAliases: { tone: { danger: 'error', warn: 'warning' } } }),
   card: schema(['items'], { ...nodeFields, title: 'string', items: 'nodes', tone: 'string', accent: 'string' }, { label: 'title', content: 'items' }, { enums: { tone: CARD_TONES } }),
   chart: schema([], {
     ...nodeFields,
@@ -287,7 +305,7 @@ export const COMPONENT_SCHEMAS: Readonly<Record<string, ComponentSchema>> = {
     oneOfRequired: [['option', 'data', 'series', 'links']],
     enums: { preset: ECHART_PRESETS },
   }),
-  'file-tree': schema(['items'], { ...nodeFields, items: 'array' }, {}, { nested: { items: fileTreeNodeSchema } }),
+  'file-tree': schema(['items'], { ...nodeFields, items: 'array' }, { nodes: 'items' }, { nested: { items: fileTreeNodeSchema } }),
   grid: schema(['items'], { ...nodeFields, cols: 'number', items: 'nodes' }),
   image: schema(['src'], { ...nodeFields, src: 'string', alt: 'string' }, { url: 'src', link: 'src' }),
   input: schema([], { ...nodeFields, label: 'string', placeholder: 'string', value: 'string', inputType: 'string', action: 'string', id: 'string' }, {}, { enums: { inputType: INPUT_TYPES } }),
@@ -323,7 +341,7 @@ export const COMPONENT_SCHEMAS: Readonly<Record<string, ComponentSchema>> = {
   steps: schema(['steps'], { ...nodeFields, steps: 'array', current: 'number' }, { items: 'steps' }, { nested: { steps: stepsRecordSchema } }),
   submit: schema(['label'], { ...nodeFields, label: 'string', action: 'string', resetAction: 'string', groups: 'array' }),
   switch: schema(['label'], { ...nodeFields, label: 'string', checked: 'boolean', action: 'string' }),
-  table: schema(['columns', 'rows'], { ...nodeFields, columns: 'array', rows: 'array', types: 'array', total: 'boolean', details: 'array', filter: 'string', filterColumn: 'number', sortField: 'string', export: 'boolean' }, { headers: 'columns', data: 'rows' }),
+  table: schema(['columns', 'rows'], { ...nodeFields, columns: 'array', rows: 'array', types: 'array', total: 'boolean', details: 'array', filter: 'string', filterColumn: 'number', sortField: 'string', export: 'boolean' }, { headers: 'columns', data: 'rows', items: 'rows' }),
   tabs: schema(['tabs'], { ...nodeFields, tabs: 'array' }, {}, { nested: { tabs: tabHolderSchema } }),
   text: schema(['content'], { ...nodeFields, content: 'string', size: 'string', center: 'boolean' }, { text: 'content' }, { enums: { size: TEXT_SIZES } }),
   textarea: schema([], { ...nodeFields, label: 'string', placeholder: 'string', rows: 'number', value: 'string', action: 'string', id: 'string' }),

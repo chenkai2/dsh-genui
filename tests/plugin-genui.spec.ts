@@ -51,10 +51,12 @@ describe('genui:fence section', () => {
     const section = assembly.sections.find(s => s.name === 'genui:fence')
     expect(section).toBeDefined()
     const text = typeof section!.text === 'string' ? section!.text : ''
-    // Budget: 3200 chars keeps the mixed CJK/ASCII section near ~1k tokens
+    // Budget: 3400 chars keeps the mixed CJK/ASCII section near ~1k tokens
     // (CJK ≈ 1 tok/char, ASCII ≈ 0.25 tok/char) — roughly half of the
-    // original ~6.1k chars / ~2.3k tokens measured in issue #29.
-    expect(text.length).toBeLessThanOrEqual(3200)
+    // original ~6.1k chars / ~2.3k tokens measured in issue #29. Raised from
+    // 3200 for issue #186's counter-example block (file-tree/callout field
+    // warnings + tightened validate wording); still ~45% below the original.
+    expect(text.length).toBeLessThanOrEqual(3400)
     for (const type of WHITELISTED_COMPONENT_TYPES) {
       expect(text).toContain(type)
     }
