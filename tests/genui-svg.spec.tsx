@@ -53,4 +53,22 @@ describe('SVG content', () => {
     expect(image.getAttribute('src')).toBe(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(code)}`)
     expect(container.querySelector('svg text')).toBeNull()
   })
+
+  it('renders HTML-style SVG without an explicit xmlns (issue #185)', () => {
+    // In HTML the parser infers the SVG namespace, so models routinely emit
+    // <svg> without xmlns; in XML mode that markup is well-formed but
+    // un-namespaced and used to be rejected 100% of the time.
+    const source = '<svg viewBox="0 0 200 60"><rect width="200" height="60" fill="#111"/><text x="100" y="38" text-anchor="middle" fill="#fff">hello</text></svg>'
+    const { getByRole, container } = renderSvg(source)
+    const src = getByRole('img', { name: '模块图' }).getAttribute('src') ?? ''
+    expect(src.startsWith('data:image/svg+xml;charset=utf-8,')).toBe(true)
+    expect(decodeURIComponent(src)).toContain('xmlns="http://www.w3.org/2000/svg"')
+    expect(container.querySelector('svg text')).toBeNull()
+  })
+
+  it('still rejects a root with an explicitly foreign namespace', () => {
+    const { queryByRole, getByRole } = renderSvg('<svg xmlns="http://www.w3.org/1999/xhtml"><text>hi</text></svg>')
+    expect(queryByRole('img')).toBeNull()
+    expect(getByRole('status')).not.toBeNull()
+  })
 })
