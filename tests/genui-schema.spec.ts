@@ -64,8 +64,13 @@ describe('GenUI runtime schema normalization', () => {
   })
 
   it('validates enum domains from the runtime registry', () => {
-    expect(validateGenuiSpec({ items: [{ type: 'callout', content: 'x', tone: 'warn' }] }).errors)
+    // 'purple' stays outside every tone vocabulary; 'warn'/'danger' on a
+    // callout are now value-aliases (warn→warning, danger→error, issue #186),
+    // so they normalize instead of failing the enum.
+    expect(validateGenuiSpec({ items: [{ type: 'callout', content: 'x', tone: 'purple' }] }).errors)
       .toContain('items[0].tone must be one of info, success, warning, error')
+    expect(validateGenuiSpec({ items: [{ type: 'callout', content: 'x', tone: 'warn' }] }).errors).toEqual([])
+    expect(validateGenuiSpec({ items: [{ type: 'callout', content: 'x', tone: 'danger' }] }).errors).toEqual([])
     expect(validateGenuiSpec({ items: [{
       type: 'plot',
       series: [{ expr: 'x', kind: 'bars' }],
