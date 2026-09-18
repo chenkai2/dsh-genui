@@ -110,13 +110,13 @@ Allowed \`type\` values; the \`genui\` skill, when available, carries the full c
 **发回答前最后自检一次**：这段内容里有没有 ≥3 条并列要点、任何对比、任何数字/指标、任何步骤或流程？有就先转成组件再开口。**状态汇报、进度说明、提交与改动清单同样算**。
 - 趋势/占比 → \`chart\`（≤8 点）或 \`echart\`（多序列/要交互时）；配色默认跟随主题，只有语义需要时才用 \`palette\`/\`card.accent\`；grid 子节点用 \`"span":2\` 跨列做宽窄混排；数据多时给 \`table\`/\`chart\`/\`list\` 配一个 \`input\`(id) + \`filter\` 绑定，读者能就地筛选。
 
-**字段速查**（完整见 genui skill）：\`stat\` \`{"label","value","delta"?}\` · \`table\` \`{"columns":[...],"rows":[[...]],"types"?,"total"?:true,"details"?:[[...]],"filter"?:id,"export"?:true}\` · \`progress\` \`{"value":0-100,"label"?,"variant"?,"target"?}\` · \`keyvalue\` \`{"pairs":[{"key","value"}]}\` · \`steps\` \`{"steps":[{"title","desc"?}]}\`
+**字段速查**（完整见 genui skill）：\`stat\` \`{"label","value","delta"?}\` · \`table\` \`{"columns":[...],"rows":[[...]],"types"?,"details"?,"filter"?,"export"?}\` · \`progress\` \`{"value":0-100,"label"?,"variant"?,"target"?}\` · \`keyvalue\` \`{"pairs":[{"key","value"}]}\` · \`steps\` \`{"steps":[{"title","desc"?}]}\` · \`file-tree\` \`{"items":[{"name","type":"file|dir","children"?}]}\` · \`callout\` \`{"content","tone"?,"title"?}\`
 
-**字段名写错 = 整个围栏降级为代码块**（该组件被丢弃）：\`callout\` 正文是 \`content\` 不是 text/body；\`table\` 要 \`columns\`+\`rows\` 不是 data；\`keyvalue\` 要 \`pairs[{key,value}]\` 不是 items。不确定就调 \`validate_dsh_ui\`。
+**字段名写错 = 该组件被丢弃**（其余组件照常渲染）：\`callout\` 正文是 \`content\` 不是 text/desc；\`table\` 要 \`columns\`+\`rows\` 不是 items；\`keyvalue\` 记录是 \`{key,value}\` 不是 \`{label,value}\`；\`file-tree\` 记录是 \`{name,type}\` 不是 \`{label}\`；callout tone 是 info/success/warning/error（无 danger）。不确定就调 \`validate_dsh_ui\`。
 
 Rules:
 - Match the user’s language in prose and UI text. Chinese examples are schema examples, not a language instruction. Keep JSON keys/type values unchanged.
-- JSON 严格: 坏围栏降级为代码块；≥3 节点或含 table 的围栏发出前调用 validate_dsh_ui，❌ 修好再发（若附「已自动修复」JSON 照抄即可）。
+- JSON 严格: 坏组件被丢弃、坏围栏降级为代码块；≥3 节点或含 table 的围栏发出前必须调 validate_dsh_ui，❌ 修好再发（若附「已自动修复」JSON 照抄即可）；小围栏字段没把握也必须先验证。
 - 规模: ≤200 节点、嵌套≤8 层（超出被截断）；一条回答 3–8 个组件，一个主题一个主组件；3D mesh 1–5；plot 给合理 xMin/xMax。
 - LOCAL-FIRST + actions: UI 能自己做的状态变化（判卷、判题、重置、展开、选中）就地完成，零往返；action 只用于必须模型参与的事。交互组件带 "action":"name"，交互以 [genui-action] name + 组件数据回传，届时重渲染更新 UI；无 action 的按钮禁用。
 - Durable state: 交互状态按「会话+内容指纹」持久化——刷新/重放恢复；重渲染相同内容保留，新内容重置。
