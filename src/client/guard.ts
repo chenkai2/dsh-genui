@@ -1619,6 +1619,82 @@ export function isRenderableProcess(processed: GenuiProcessResult): boolean {
   return processed.spec !== null && (processed.errors.length === 0 || isIntentionalBudgetCut(processed))
 }
 
+/* ---------------- partial fence rendering (issue #186) ---------------- */
+
+/** Longest declared-node path prefix a validation error points at. */
+const DECLARED_NODE_PATH_RE = /^(items\[\d+\](?:\.(?:items\[\d+\]|tabs\[\d+\]\.items\[\d+\]))*)/
+
+function errorNodePath(error: string): string | null {
+  const match = DECLARED_NODE_PATH_RE.exec(error)
+  return match === null ? null : match[1] ?? null
+}
+
+/** Where the node at a declared path lives: its parent array and index. */
+function nodeSlotAt(root: Record<string, unknown>, path: string): { array: unknown[]; index: number } | undefined {
+  const steps = [...path.matchAll(/(?:^|\.)(items|tabs)\[(\d+)\]/g)]
+  if (steps.length === 0 || steps[steps.length - 1]![1] !== 'items') return undefined
+  let current: unknown = root
+  for (let i = 0; i < steps.length - 1; i++) {
+    const step = steps[i]!
+    const holder = obj(current)
+    const list = holder === undefined ? undefined : holder[step[1]!]
+    current = Array.isArray(list) ? list[Number(step[2])] : undefined
+    if (current === undefined) return undefined
+  }
+  const holder = obj(current)
+  const list = holder === undefined ? undefined : holder.items
+  if (!Array.isArray(list)) return undefined
+  return { array: list, index: Number(steps[steps.length - 1]![2]) }
+}
+
+/** Deep-clone a JSON value for pruning; null when it cannot round-trip. */
+function cloneJsonValue(value: unknown): Record<string, unknown> | null {
+  try {
+    return obj(JSON.parse(JSON.stringify(value))) ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Best-effort repair for a spec whose strict validation failed: drop the
+ * declared nodes the errors point at and re-run the whole pipeline once.
+ *
+ * The fence channels call this after the strict gate refuses, so ONE bad
+ * component no longer degrades the whole fence to a code block — the
+ * behaviour the capability map documents ("坏节点静默丢弃…不会拖垮界面") and
+ * that validate_dsh_ui keeps diagnosing for the model. Bounded to a single
+ * retry: a second failing pass is a genuinely pathological tree and keeps
+ * today's full-fence fallback. Chart semantics stay protected the same way —
+ * an undrawable chart is DROPPED here, never repaired into a blank canvas.
+ */
+export function partialRepairGenuiSpec(processed: GenuiProcessResult): GenuiSpec | null {
+  if (isRenderableProcess(processed)) return processed.spec
+  if (processed.spec === null) return null
+  const root = obj(processed.value)
+  // A bare component root has no siblings to keep, and its validation paths
+  // are wrap-relative (`items[0]` is the root itself after wrapping).
+  if (root === undefined || isComponentRoot(root)) return null
+  if (processed.declaredNativeCount <= 1) return null
+  const paths = new Set<string>()
+  for (const error of processed.errors) {
+    if (error.startsWith('spec exceeds ')) continue
+    const nodePath = errorNodePath(error)
+    if (nodePath !== null) paths.add(nodePath)
+  }
+  if (paths.size === 0) return null
+  const pruned = cloneJsonValue(processed.value)
+  if (pruned === null) return null
+  // Deepest paths first: dropping a parent shifts every later sibling index.
+  for (const path of [...paths].sort((a, b) => b.split('.').length - a.split('.').length)) {
+    const slot = nodeSlotAt(pruned, path)
+    if (slot !== undefined) slot.array.splice(slot.index, 1)
+  }
+  const retry = processGenuiSpec(pruned)
+  if (!isRenderableProcess(retry) || retry.renderedNativeCount === 0) return null
+  return retry.spec
+}
+
 type Walker = (list: unknown, depth: number, path: string) => void
 
 function validateChartData(value: unknown, at: string, errors: string[]): void {
