@@ -166,4 +166,23 @@ describe('field-name regression corpus (real-session fences)', () => {
       { type: 'table', columns: ['a'], rows: [['1']] },
     ])
   })
+
+  it('maps a callout tone spelled with the neighbouring component vocabulary', () => {
+    // Fourth real-session defect class (MR2028 review, 2026-09-20): the model
+    // wrote `{"type":"callout","tone":"danger",…}`. `danger` is the card /
+    // button / badge / hero spelling; callout's domain ends at `error`, and an
+    // out-of-domain enum value is a HARD error that took the whole fence down.
+    const raw = '{"gap":12,"items":[{"type":"callout","tone":"danger","title":"记忆里的仓库路径是错的","content":"vault 记的是 gouwu/daogou，用它是 404 Project Not Found。"},{"type":"callout","tone":"info","title":"目标分支是 release","content":"实测 tauth2 分支。"}]}'
+    expect(renders(raw)).toBe(true)
+    const processed = processGenuiSpec(parsePartialGenuiSpec(raw) as unknown)
+    expect(processed.errors).toEqual([])
+    expect(processed.repaired?.items?.[0]).toMatchObject({ type: 'callout', tone: 'error' })
+    expect(processed.repaired?.items?.[1]).toMatchObject({ type: 'callout', tone: 'info' })
+    expect(processed.warnings.map(warning => warning.message))
+      .toContainEqual(expect.stringContaining("items[0].tone 'danger' is not one of info / success / warning / error"))
+
+    // A word with no equivalent is NOT guessed at — it keeps failing loudly.
+    expect(isRenderableProcess(processGenuiSpec({ items: [{ type: 'callout', content: 'x', tone: 'urgent' }] }))).toBe(false)
+    expect(isRenderableProcess(processGenuiSpec({ items: [{ type: 'callout', content: 'x', tone: 'warn' }] }))).toBe(true)
+  })
 })

@@ -64,7 +64,10 @@ describe('GenUI runtime schema normalization', () => {
   })
 
   it('validates enum domains from the runtime registry', () => {
-    expect(validateGenuiSpec({ items: [{ type: 'callout', content: 'x', tone: 'warn' }] }).errors)
+    // A genuinely unknown word stays a hard error: the synonym table only
+    // maps equivalents the component vocabulary already has (`danger`→`error`,
+    // `warn`↔`warning`), never guesses at typos.
+    expect(validateGenuiSpec({ items: [{ type: 'callout', content: 'x', tone: 'urgent' }] }).errors)
       .toContain('items[0].tone must be one of info, success, warning, error')
     expect(validateGenuiSpec({ items: [{
       type: 'plot',

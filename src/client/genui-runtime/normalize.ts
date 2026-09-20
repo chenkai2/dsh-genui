@@ -37,6 +37,50 @@ function normalizeAliasFields(value: Record<string, unknown>, path: string, type
   return out
 }
 
+/**
+ * Cross-component tone synonyms. Components share one tone vocabulary in
+ * spirit but not in values: `danger` is valid for `card`/`button`/`badge`/
+ * `hero` and NOT for `callout`, whose highest tone is `error`; `badge` spells
+ * its middle tone `warn` while every other component spells it `warning`.
+ * The model reaches for the word that fits the meaning, and an out-of-domain
+ * enum value is a HARD validation error that kills the whole fence even though
+ * repair would have dropped the field — so map the equivalent words.
+ *
+ * Only equivalents are mapped: a value with no equivalent keeps its field and
+ * still fails validation loudly (a genuine typo must stay visible).
+ */
+const ENUM_SYNONYMS: Readonly<Record<string, string>> = {
+  danger: 'error',
+  error: 'danger',
+  warn: 'warning',
+  warning: 'warn',
+}
+
+/**
+ * Rewrite an out-of-domain enum value that has an equivalent in the target
+ * component's domain. Values without an equivalent are left untouched so the
+ * strict validator still reports them.
+ */
+function normalizeEnumFields(value: Record<string, unknown>, path: string, type: string, warnings: GenuiDiagnostic[]): void {
+  const definition = COMPONENT_SCHEMAS[type]
+  if (definition === undefined) return
+  for (const [field, values] of Object.entries(definition.enums)) {
+    const current = value[field]
+    if (typeof current !== 'string' || values.includes(current)) continue
+    const canonical = ENUM_SYNONYMS[current]
+    if (canonical === undefined || !values.includes(canonical)) continue
+    value[field] = canonical
+    warnings.push({
+      kind: 'alias',
+      path: `${path}.${field}`,
+      message: `${path}.${field} '${current}' is not one of ${values.join(' / ')}; adopted the equivalent '${canonical}'`,
+      type,
+      field,
+      canonical,
+    })
+  }
+}
+
 function normalizeNode(value: unknown, path: string, warnings: GenuiDiagnostic[]): unknown {
   if (!isNode(value)) return value
   const type = value.type as string
@@ -44,6 +88,7 @@ function normalizeNode(value: unknown, path: string, warnings: GenuiDiagnostic[]
   // Custom nodes are opaque by contract: don't inspect or rewrite their data.
   if (definition === undefined) return value
   const out = normalizeAliasFields(value, path, type, warnings)
+  normalizeEnumFields(out, path, type, warnings)
   const normalizeNodeValue = (child: unknown, childPath: string): unknown => normalizeNode(child, childPath, warnings)
   const normalizeNodeArray = (children: unknown, childPath: string): unknown => Array.isArray(children)
     ? children.map((child, index) => normalizeNodeValue(child, `${childPath}[${index}]`))
