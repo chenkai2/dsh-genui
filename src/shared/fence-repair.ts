@@ -209,9 +209,11 @@ function rewriteTetrisTableColumns(raw: string): { text: string; repairs: number
     if (ch === '"') { inString = true; out += ch; continue }
     if (ch === '{' || ch === '[') { stack.push(ch); out += ch; continue }
     if (ch === '}' || ch === ']') {
-      const open = stack.pop()
-      if ((ch === '}' && open === '{') || (ch === ']' && open === '[')) out += ch
-      else edits += 1                     // stray closer → drop it
+      const open = stack[stack.length - 1]
+      if ((ch === '}' && open === '{') || (ch === ']' && open === '[')) {
+        stack.pop()
+        out += ch
+      } else edits += 1                   // stray closer → drop it
       continue
     }
     out += ch
@@ -247,8 +249,15 @@ export function completeFenceJson(raw: string): { text: string; repairs: number 
   // wrongly), so rewrite the shape, then let the scan run on the result.
   const tetris = rewriteTetrisTableColumns(raw)
   if (tetris !== null) {
+    try {
+      JSON.parse(tetris.text)
+      return tetris
+    } catch {
+      // Tetris 形状修复可能暴露需要 tier-2 继续处理的结构问题。
+    }
     const scanned = completeFenceJson(tetris.text)
-    return scanned === null ? tetris : { text: scanned.text, repairs: scanned.repairs + tetris.repairs }
+    if (scanned === null) return null
+    return { text: scanned.text, repairs: scanned.repairs + tetris.repairs }
   }
   let out = ''
   const stack: Array<'}' | ']'> = []

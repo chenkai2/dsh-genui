@@ -52,6 +52,63 @@ describe('Tetris-shaped table columns (issue #192)', () => {
     })
   })
 
+  it('preserves siblings after a keyed Tetris table', () => {
+    const raw =
+      '{"items":[' +
+        '{"type":"table","columns":["a"],["rows":[["x"]]]},' +
+        '{"type":"text","content":"tail"}' +
+      ']}'
+
+    const completed = completeFenceJson(raw)
+
+    expect(completed).not.toBeNull()
+    expect(JSON.parse(completed!.text)).toEqual({
+      items: [
+        {
+          type: 'table',
+          columns: ['a'],
+          rows: [['x']],
+        },
+        {
+          type: 'text',
+          content: 'tail',
+        },
+      ],
+    })
+  })
+
+  it('preserves siblings after a bare-matrix Tetris table', () => {
+    const raw =
+      '{"items":[' +
+        '{"type":"table","columns":["a"],[["x"]]},' +
+        '{"type":"text","content":"tail"}' +
+      ']}'
+
+    const completed = completeFenceJson(raw)
+
+    expect(completed).not.toBeNull()
+    expect(JSON.parse(completed!.text)).toEqual({
+      items: [
+        {
+          type: 'table',
+          columns: ['a'],
+          rows: [['x']],
+        },
+        {
+          type: 'text',
+          content: 'tail',
+        },
+      ],
+    })
+  })
+
+  it('returns null when a Tetris rewrite leaves an unrecoverable defect', () => {
+    const raw = '{"items":[{"type":"table","columns":["a"],[["x"]],"broken":}]}'
+    const completed = completeFenceJson(raw)
+
+    expect(completed).toBeNull()
+  })
+
   it('leaves a legal columns+rows body untouched', () => {
     const legal = '{"items":[{"type":"table","columns":["a"],"rows":[["1"]]}]}'
     expect(completeFenceJson(legal)).toBeNull()
