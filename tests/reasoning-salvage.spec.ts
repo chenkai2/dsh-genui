@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 // Reasoning salvage (从思考块抢救界面): the model sometimes composes a complete
 // `dsh-ui` fence inside its reasoning block and ends the turn with an EMPTY
 // body. `fence-feedback` retries the same turn twice, but a degenerate context
@@ -6,11 +7,12 @@
 // reasoning tokens with zero text, md5 unchanged all three times).
 //
 // The client fallback reads the fence from the ChatSnapshot's reasoning blocks
-// and publishes the same spec to the session panel, so the user keeps the
-// interface. These tests pin the decision, not the plumbing.
-import { describe, expect, it } from 'vitest'
+// and mounts the same spec back INTO THE MESSAGE LIST (inline, right where the
+// answer should have been); the session panel is only the fallback when the
+// host row cannot be found. These tests pin the decision and the placement.
+import { afterEach, describe, expect, it } from 'vitest'
 import type { AssistantBlock } from '@deepseek-ai/dsh-client-ui-chat/client'
-import { planReasoningSalvage } from '../src/client/reasoning-salvage.ts'
+import { mountSalvage, planReasoningSalvage, salvageRowFor } from '../src/client/reasoning-salvage.tsx'
 import { sourceFencesOfReasoning } from '../src/client/source-fence.ts'
 
 /** A fence body that renders (one stat carrying a metric list). */
@@ -74,5 +76,50 @@ describe('planReasoningSalvage', () => {
     const older = JSON.stringify({ title: '旧的一份', items: [{ type: 'text', content: 'old' }] })
     const plan = planReasoningSalvage({ ...base, blocks: [reasoning(older), reasoning(GOOD)] })
     expect(plan!.title).toBe('两张落库卡完成')
+  })
+})
+
+describe('inline placement (内联优先，找不到行才退回面板)', () => {
+  /** host assistant row fixture: data-chat-node-key carries the context key. */
+  function row(key: string, part?: string): HTMLElement {
+    const el = document.createElement('div')
+    el.setAttribute('data-chat-flow-kind', 'assistant-step')
+    el.setAttribute('data-chat-node-key', key)
+    if (part !== undefined) el.setAttribute('data-chat-group-part', part)
+    const inner = document.createElement('div')
+    inner.textContent = 'body'
+    el.append(inner)
+    document.body.append(el)
+    return el
+  }
+
+  afterEach(() => { document.body.innerHTML = '' })
+
+  it('prefers the body row and falls back to the reasoning row', () => {
+    const key = '14:assistant-step9:0'
+    const reasoning = row(key, 'reasoning')
+    expect(salvageRowFor(key)?.dataset.chatGroupPart).toBe('reasoning')
+    const body = row(key)
+    expect(salvageRowFor(key)).toBe(body)
+    expect(salvageRowFor('nope')).toBeNull()
+    reasoning.remove()
+    expect(salvageRowFor(key)).toBe(body)
+  })
+
+  it('mounts the salvage right after the row and cleans up on dispose', () => {
+    const key = '14:assistant-step9:0'
+    const target = row(key)
+    const classes: string[] = []
+    let disposed = false
+    const mount = mountSalvage(target, { items: [{ type: 'text', content: 'x' }] } as never, (container) => {
+      classes.push(container.className)
+      return () => { disposed = true }
+    })
+    expect(mount.container.previousElementSibling).toBe(target)
+    expect(mount.container.getAttribute('data-genui-salvage')).toBe('')
+    expect(classes[0]).toContain('genui-reasoning-salvage')
+    mount.dispose()
+    expect(disposed).toBe(true)
+    expect(mount.container.isConnected).toBe(false)
   })
 })

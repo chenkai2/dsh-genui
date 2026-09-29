@@ -29,7 +29,7 @@ import type { IConversation } from '@deepseek-ai/dsh-client-ui-conversation/clie
 import type { Key, ReactNode } from 'react'
 import * as primitives from '@deepseek-ai/dsh-client-ui-primitives'
 import { installDomFenceRenderer } from './dom-fence.tsx'
-import { installReasoningSalvage } from './reasoning-salvage.ts'
+import { installReasoningSalvage } from './reasoning-salvage.tsx'
 import { renderGenuiFence, type GenuiFenceContext } from './fence-render.tsx'
 import { renderSvgFence } from './svg-fence.tsx'
 import { createPanelSlashSource } from './panel-command.ts'
@@ -168,9 +168,12 @@ export function apply(ctx: Context): () => void {
   // thinking block and ends the turn with an empty body (fence-feedback retries
   // twice, but a degenerate context can answer both with a byte-identical
   // replay). This client-side fallback reads the fence from the ChatSnapshot's
-  // reasoning blocks and publishes the same spec to the session panel — the
-  // user keeps the interface even when the model will not send it.
-  disposers.push(installReasoningSalvage(ctx))
+  // reasoning blocks and mounts the same spec **back into the message list**
+  // (inline, right where the answer should have been); the session panel is
+  // only the fallback when the host row cannot be found.
+  disposers.push(installReasoningSalvage(ctx, {
+    sendAction: (sessionId, action, payload) => sendInlineGenuiAction(ctx, sessionId, action, payload),
+  }))
   // Keyed toolview: the harness dispatches 'tool.call.toolview' by wire tool
   // name; registering under 'render_ui' gives the tool's result card the
   // GenUI renderer (reading the repaired spec from result meta). The toolview
