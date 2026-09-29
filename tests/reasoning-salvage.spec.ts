@@ -27,7 +27,7 @@ const BROKEN = JSON.stringify({ items: [{ type: 'stat' }] })
 const text = (body: string): AssistantBlock => ({ kind: 'text', text: `说明\n\`\`\`dsh-ui\n${body}\n\`\`\`\n` } as AssistantBlock)
 const reasoning = (body: string): AssistantBlock => ({ kind: 'reasoning', text: `  \`\`\`dsh-ui\n${body}\n\`\`\`   ` } as AssistantBlock)
 
-const base = { status: 'settled' as const, alreadySalvaged: false, panelTaken: false }
+const base = { status: 'settled' as const, alreadySalvaged: false }
 
 describe('sourceFencesOfReasoning', () => {
   it('reads code fences out of reasoning blocks only', () => {
@@ -67,8 +67,11 @@ describe('planReasoningSalvage', () => {
     expect(planReasoningSalvage({ ...base, status: undefined, blocks: [reasoning(GOOD)] })).toBeNull()
   })
 
-  it('yields to an existing panel and to its own bookkeeping', () => {
-    expect(planReasoningSalvage({ ...base, panelTaken: true, blocks: [reasoning(GOOD)] })).toBeNull()
+  it('still salvages when the panel already has content (inline is not the panel)', () => {
+    // Regression: the old gate treated "panel taken" as "do not salvage at all",
+    // so a single earlier panel publication disabled every later inline recovery
+    // in the session. Panel occupancy may only stop the PANEL FALLBACK.
+    expect(planReasoningSalvage({ ...base, blocks: [reasoning(GOOD)] })).not.toBeNull()
     expect(planReasoningSalvage({ ...base, alreadySalvaged: true, blocks: [reasoning(GOOD)] })).toBeNull()
   })
 

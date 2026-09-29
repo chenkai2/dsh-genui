@@ -16,7 +16,8 @@
  * 刻意保守，避免与正常渲染抢位置：
  * - 只在 assistant step `settled` / `interrupted` 之后动作，流式中绝不触发；
  * - 正文里只要有一份能渲染的围栏就完全不动（那是正常路径的产物）；
- * - 面板里已经有内容时不覆盖（那是模型或用户自己发布的）；
+ * - 面板里已经有内容时**不覆盖**——但这只约束「退回面板」那一步，绝不能阻止内联
+ *   （早期实现把两者混在一起，面板被旧版写过一次之后所有内联抢救全部失效）；
  * - 每个 assistant step 只评估一次（`session:nodeKey`），刷新回来也不会重复；
  * - 内联容器挂在宿主行之后，宿主重渲染把它摘掉时按 tick 修回（与 DOM 围栏通道同一策略）。
  *
@@ -88,9 +89,8 @@ export function planReasoningSalvage(input: {
   readonly status: SalvageStatus | undefined
   readonly blocks: readonly AssistantBlock[]
   readonly alreadySalvaged: boolean
-  readonly panelTaken: boolean
 }): SalvagePlan | null {
-  if (input.alreadySalvaged || input.panelTaken) return null
+  if (input.alreadySalvaged) return null
   if (input.status !== 'settled' && input.status !== 'interrupted') return null
   // 正文里有能渲染的围栏 → 用户已经看到界面（正常路径），完全不动。
   if (renderableFenceOf(sourceFencesOfAssistant(input.blocks)) !== null) return null
@@ -204,6 +204,8 @@ export interface ReasoningSalvageOptions {
   readonly pollMs?: number
   /** 等宿主把消息行渲染出来的尝试次数，超过就退回面板。 */
   readonly rowTries?: number
+  /** 面板被占时继续等宿主行的总 tick 上限（默认 60，约一分钟）。 */
+  readonly maxPendingTicks?: number
 }
 
 /** 抢救容器挂在宿主行之后：宿主 React 重渲染会摘掉外来节点，按 tick 修回。 */
@@ -223,8 +225,10 @@ export function installReasoningSalvage(ctx: Context, options: ReasoningSalvageO
   /** 已经内联挂上的抢救：nodeKey → 行与容器。 */
   const mounted = new Map<string, { row: HTMLElement; mount: SalvageMount }>()
   /** 已决定抢救、但宿主行还没出现（等几次，仍无则退回面板）。 */
-  const pending = new Map<string, { sessionId: SessionId; plan: SalvagePlan; tries: number }>()
+  const pending = new Map<string, { sessionId: SessionId; plan: SalvagePlan; tries: number; total: number }>()
   const rowTries = options.rowTries ?? 3
+  /** 面板被占时继续等宿主行的总次数上限（约一分钟），避免无限重试。 */
+  const maxPendingTicks = options.maxPendingTicks ?? 60
 
   const renderInline = (sessionId: SessionId, spec: GenuiSpec) => (container: HTMLElement): (() => void) => {
     const root: Root = createRoot(container)
@@ -237,14 +241,30 @@ export function installReasoningSalvage(ctx: Context, options: ReasoningSalvageO
     return () => root.unmount()
   }
 
-  /** 退回面板：插件自有的可见界面，宿主结构变化时仍然有地方可看。 */
-  const publishToPanel = (sessionId: SessionId, plan: SalvagePlan): void => {
+  /**
+   * 退回面板：插件自有的可见界面，宿主结构变化时仍然有地方可看。
+   *
+   * @returns 是否真的发布（面板已被占用时不覆盖，返回 false 让调用方继续等宿主行）。
+   */
+  const publishToPanel = (sessionId: SessionId, plan: SalvagePlan): boolean => {
+    let taken = false
+    try {
+      taken = getPanelSpec(sessionId) !== null
+    } catch {
+      taken = true
+    }
+    if (taken) {
+      console.warn('[genui] reasoning salvage: panel already has content; keeping it inline-only')
+      return false
+    }
     try {
       setLocalPanel(sessionId, plan.spec)
       requestPanelExpand(sessionId)
       console.info('[genui] reasoning salvage fell back to the session panel')
+      return true
     } catch (error) {
       console.warn(`[genui] reasoning salvage publish failed (${error instanceof Error ? error.message : String(error)})`)
+      return false
     }
   }
 
@@ -274,9 +294,17 @@ export function installReasoningSalvage(ctx: Context, options: ReasoningSalvageO
         continue
       }
       entry.tries += 1
-      if (entry.tries >= rowTries) {
+      entry.total += 1
+      if (entry.tries < rowTries) continue
+      // 耐心用尽：试面板。面板被占（不覆盖）就继续等宿主行，直到总上限。
+      if (publishToPanel(entry.sessionId, entry.plan)) {
         pending.delete(key)
-        publishToPanel(entry.sessionId, entry.plan)
+        continue
+      }
+      entry.tries = 0
+      if (entry.total >= maxPendingTicks) {
+        pending.delete(key)
+        console.warn(`[genui] reasoning salvage gave up on ${key}: no host row and the panel is taken`)
       }
     }
   }
@@ -307,17 +335,10 @@ export function installReasoningSalvage(ctx: Context, options: ReasoningSalvageO
     const marker = `${String(sessionId)}:${best.key}`
     if (considered.has(marker)) return
     considered.add(marker)
-    let panelTaken = false
-    try {
-      panelTaken = getPanelSpec(sessionId) !== null
-    } catch {
-      panelTaken = true
-    }
     const plan = planReasoningSalvage({
       status: best.status,
       blocks: best.blocks,
       alreadySalvaged: mounted.has(best.key),
-      panelTaken,
     })
     if (plan === null) return
     // 内联优先：界面应该出现在它本该出现的位置。
@@ -327,7 +348,7 @@ export function installReasoningSalvage(ctx: Context, options: ReasoningSalvageO
       console.info(`[genui] recovered a reasoning-only fence from ${best.key} into the message list`)
       return
     }
-    pending.set(best.key, { sessionId, plan, tries: 0 })
+    pending.set(best.key, { sessionId, plan, tries: 0, total: 0 })
   }
 
   const timer = globalThis.setInterval(evaluate, options.pollMs ?? DEFAULT_POLL_MS)
