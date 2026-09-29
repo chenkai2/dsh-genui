@@ -1,0 +1,78 @@
+// Reasoning salvage (从思考块抢救界面): the model sometimes composes a complete
+// `dsh-ui` fence inside its reasoning block and ends the turn with an EMPTY
+// body. `fence-feedback` retries the same turn twice, but a degenerate context
+// can answer both retries with a byte-identical replay (real session: notices
+// DID reach the model — inputTokens 189 → 1016 → 944 — output stayed 802
+// reasoning tokens with zero text, md5 unchanged all three times).
+//
+// The client fallback reads the fence from the ChatSnapshot's reasoning blocks
+// and publishes the same spec to the session panel, so the user keeps the
+// interface. These tests pin the decision, not the plumbing.
+import { describe, expect, it } from 'vitest'
+import type { AssistantBlock } from '@deepseek-ai/dsh-client-ui-chat/client'
+import { planReasoningSalvage } from '../src/client/reasoning-salvage.ts'
+import { sourceFencesOfReasoning } from '../src/client/source-fence.ts'
+
+/** A fence body that renders (one stat carrying a metric list). */
+const GOOD = JSON.stringify({ title: '两张落库卡完成', items: [{
+  type: 'keyvalue',
+  pairs: [{ key: '采集→博文', value: '已接通' }],
+}] })
+
+/** A fence body that cannot render (required field missing). */
+const BROKEN = JSON.stringify({ items: [{ type: 'stat' }] })
+
+const text = (body: string): AssistantBlock => ({ kind: 'text', text: `说明\n\`\`\`dsh-ui\n${body}\n\`\`\`\n` } as AssistantBlock)
+const reasoning = (body: string): AssistantBlock => ({ kind: 'reasoning', text: `  \`\`\`dsh-ui\n${body}\n\`\`\`   ` } as AssistantBlock)
+
+const base = { status: 'settled' as const, alreadySalvaged: false, panelTaken: false }
+
+describe('sourceFencesOfReasoning', () => {
+  it('reads code fences out of reasoning blocks only', () => {
+    const fences = sourceFencesOfReasoning([text(GOOD), reasoning(GOOD), { kind: 'tool-call' } as unknown as AssistantBlock])
+    expect(fences).toHaveLength(1)
+    expect(fences[0]!.lang).toBe('dsh-ui')
+  })
+})
+
+describe('planReasoningSalvage', () => {
+  it('salvages the fence the model left in its thinking block', () => {
+    const plan = planReasoningSalvage({ ...base, blocks: [reasoning(GOOD)] })
+    expect(plan).not.toBeNull()
+    expect(plan!.title).toBe('两张落库卡完成')
+    // The published spec carries its provenance first, then the salvaged nodes.
+    expect(plan!.spec.items[0]!.type).toBe('callout')
+    expect(plan!.spec.items).toHaveLength(2)
+  })
+
+  it('stays out of the way when the body already rendered a fence', () => {
+    expect(planReasoningSalvage({ ...base, blocks: [text(GOOD), reasoning(GOOD)] })).toBeNull()
+  })
+
+  it('ignores a body fence that cannot render, but salvages a good reasoning fence', () => {
+    const plan = planReasoningSalvage({ ...base, blocks: [text(BROKEN), reasoning(GOOD)] })
+    expect(plan).not.toBeNull()
+  })
+
+  it('never treats an unrenderable reasoning fence as salvageable', () => {
+    expect(planReasoningSalvage({ ...base, blocks: [reasoning(BROKEN)] })).toBeNull()
+    expect(planReasoningSalvage({ ...base, blocks: [] })).toBeNull()
+  })
+
+  it('waits for the step to settle', () => {
+    expect(planReasoningSalvage({ ...base, status: 'running', blocks: [reasoning(GOOD)] })).toBeNull()
+    expect(planReasoningSalvage({ ...base, status: 'interrupted', blocks: [reasoning(GOOD)] })).not.toBeNull()
+    expect(planReasoningSalvage({ ...base, status: undefined, blocks: [reasoning(GOOD)] })).toBeNull()
+  })
+
+  it('yields to an existing panel and to its own bookkeeping', () => {
+    expect(planReasoningSalvage({ ...base, panelTaken: true, blocks: [reasoning(GOOD)] })).toBeNull()
+    expect(planReasoningSalvage({ ...base, alreadySalvaged: true, blocks: [reasoning(GOOD)] })).toBeNull()
+  })
+
+  it('prefers the LAST renderable reasoning fence', () => {
+    const older = JSON.stringify({ title: '旧的一份', items: [{ type: 'text', content: 'old' }] })
+    const plan = planReasoningSalvage({ ...base, blocks: [reasoning(older), reasoning(GOOD)] })
+    expect(plan!.title).toBe('两张落库卡完成')
+  })
+})
