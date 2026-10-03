@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### 修复
+
+- **部分渲染不再因为「只有一个声明节点」而整条放弃**：真实样本里 `items` 是一张合法的 `table` 紧跟两个 `{"key","value"}` 对象（模型漏了 `keyvalue` 包装）。守卫对这两个元素报 `missing string 'type'` 是正确的，但 `partialRepairGenuiSpec` 的 `declaredNativeCount <= 1 → null` 早退把**那张能渲染的 table 也一起丢了**，于是围栏退化成代码块。删掉这个早退：下面已有的 `renderedNativeCount === 0` 检查已经覆盖它原本要防的情形（唯一那个声明节点本身坏掉时，剪掉后重试为空，仍然不渲染）。
+- SKILL.md 第 3 条补充同类结构错：`{"key","value"}` 必须先包进 `{"type":"keyvalue","pairs":[…]}`，`items` 里每个元素都要有 `type`。
+
 ## [0.11.3] - 2026-09-29
 
 ### 兼容性

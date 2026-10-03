@@ -1679,7 +1679,15 @@ export function partialRepairGenuiSpec(processed: GenuiProcessResult): GenuiSpec
   // A bare component root has no siblings to keep, and its validation paths
   // are wrap-relative (`items[0]` is the root itself after wrapping).
   if (root === undefined || isComponentRoot(root)) return null
-  if (processed.declaredNativeCount <= 1) return null
+  // NOTE: there used to be an early `declaredNativeCount <= 1 → null` here. It
+  // was too coarse: a spec with ONE declared node plus non-declared junk
+  // siblings (real sample: `items` holding a valid `table` followed by two bare
+  // `{"key","value"}` objects the model forgot to wrap in a `keyvalue` node)
+  // has a perfectly good node to keep, yet every node was dropped and the fence
+  // degraded to a code block. The final `renderedNativeCount === 0` check below
+  // already covers the case the early return was protecting: when the ONLY
+  // declared node is the broken one, pruning removes it and the retry has
+  // nothing to render.
   const paths = new Set<string>()
   for (const error of processed.errors) {
     if (error.startsWith('spec exceeds ')) continue

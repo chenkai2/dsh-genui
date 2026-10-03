@@ -55,6 +55,22 @@ describe('partial fence rendering (issue #186)', () => {
     expect(fenceSpec('{"type":"steps","items":[{"desc":"no title"}]}')).toBeNull()
   })
 
+  it('keeps one valid node when the junk siblings are not declared components', () => {
+    // Real sample (turn 1364): the model wrote its pairs directly into `items`,
+    // forgetting the `keyvalue` wrapper. The table is perfectly renderable, so
+    // dropping the two undeclared siblings must not also drop the table.
+    const raw = '{"items":[{"type":"table","columns":["a"],"rows":[["1"]]},{"key":"k1","value":"v1"},{"key":"k2","value":"v2"}]}'
+    const spec = fenceSpec(raw)
+    expect(spec).not.toBeNull()
+    expect(spec!.items).toHaveLength(1)
+    expect(spec!.items[0]!.type).toBe('table')
+  })
+
+  it('still degrades when the only declared node is the broken one', () => {
+    // The final retry-render check keeps this silent (no blank UI).
+    expect(fenceSpec('{"items":[{"type":"progress","value":200},{"key":"k","value":"v"}]}')).toBeNull()
+  })
+
   it('passes a clean spec through untouched', () => {
     const raw = '{"items":[{"type":"text","content":"好"}]}'
     expect(partialRepairGenuiSpec(processGenuiSpec(JSON.parse(raw)))).toEqual(fenceSpec(raw))
